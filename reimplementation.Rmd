@@ -1,7 +1,7 @@
 ---
-title: "Reimplementation of Simulator"
+title: "Reimplementation Work for N-of-1 Simulator"
 author: "Ed Baskerville"
-date: "4/19/2018"
+date: "4/20/2018"
 output: html_document
 ---
 
@@ -9,41 +9,167 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Implementation of model
+## Conceptual overview
+
+Conceptually, the simulator is implemented in *continuous time*, and the various processes, including the baseline outcome process ($B(t)$), the determistic effect processes ($\mathbf{X}(t)$), and the final outcome process ($Z(t)$) are all realized as *vectorized continuous functions of time*.
+
+This removes the brittleness of matching simulation events to discrete indices, simplifying the code and making it easier to generalize.
+Because these functions are vectorized, they should perform fairly well without C optimizations.
+
+For $X_j(\mathbf{t})$, the code precomputes the initial values of each segment of the simulation by calculating the exponential decay from the previous change point, and then constructs a (vectorized) function to match a vector of values of $t$ to corresponding vectors of initial conditions and parameters, and then (vectorizedly) computes the exponential decay at each point.
+
+For $B(t)$, by default the code computes a Brownian drift in discrete time and returns an linearly interpolating function.
+This means that the drift process can have different timesteps from the rest of the simulation.
+But it also means that the baseline function can be replaced by *any* R function, including, e.g., `function(t) 10 + 0.1 * t`.
+
+The code for the outcome process $Z(t)$ simply calls $B(t)$ and each $X_j(t)$ with a vector of timepoints, and returns a linearly interpolating function.
+
+Finally, the outcome sampling process ${\hat{Z}}(t)$ simply evaluates the outcome process at arbitrary timepoints and applies noise and transformations.
+
+
+## Deterministic effect process
+
+Each deterministic effect process is simply a stepwise series of exponential decays, with equilibria corresponding to either 0 or $E$ and decay rates corresponding to $\tau$ or $\gamma$.
+
+The function `make_effect_function` precomputes initial values for each period of the simulation and returns a function that can evaluate the deterministic effect $X(t)$ for an arbitrary vector of time values.
+
+```{r}
+exponential_decay <- function(X_initial, X_target, tau, delta_t) {
+  X_target + (X_initial - X_target) * exp(-delta_t / tau)
+}
+
+# Returns a vectorized function of time for the (deterministic) effect process
+# for a single treatment
+make_effect_function <- function(X_initial, t_change_vec, treatment_vec, E, tau0, tau1) {
+  t_initial = t_change_vec[1]
+  t_final = t_change_vec[length(t_change_vec)]
+  
+  n_periods <- length(t_change_vec) - 1
+  stopifnot(n_periods >= 1)
+  
+  t_period_start <- t_change_vec[1:n_periods]
+  t_period_end <- t_change_vec[2:(n_periods + 1)]
+  
+  # Construct a lookup table with effect values at the start of each time period
+  # by analytically integrating the ODE
+  X_vec <- numeric(n_periods)
+  X_vec[1] <- X_initial
+  if(n_periods > 1) {
+    for(i in 1:(n_periods - 1)) {
+      X_target <- if(treatment_vec[i]) E else 0
+      tau <- if(treatment_vec[i]) tau1 else tau0
+      X_vec[i+1] <- exponential_decay(X_vec[i], X_target, tau, t_period_end[i] - t_period_start[i])
+    }
+  }
+  
+  function(t_vec) {
+    stopifnot(all(t_vec >= t_initial))
+    stopifnot(all(t_vec <= t_final))
+    
+    # Create a vector of indices into t_change_vec where
+    # period_indices_halfopen[i] is j if t_change_vec[j] <= t_vec[i] <  t_change_vec[j+1]
+    # period_indices_halfopen[i] will be NA if t_vec[i] == t_final
+    t_greq_start <- outer(t_vec, t_period_start, '>=')
+    t_less_end <- outer(t_vec, t_period_end, '<')
+    period_indices_halfopen = apply(t_greq_start & t_less_end, 1, function(v) match(TRUE, v))
+    
+    # Construct a fully non-NA vector of indices into t_change_vec
+    # by assigning cases where t_vec[i] == t_final to the index (n_periods)
+    period_indices <- ifelse(t_vec == t_final, n_periods, period_indices_halfopen)
+    
+    # Analytically integrate the ODE for the vector of time values,
+    # using matched vectors of initial conditions and parameters for matched time periods
+    X_target <- ifelse(treatment_vec[period_indices], E, 0)
+    tau <- ifelse(treatment_vec[period_indices], tau1, tau0)
+    exponential_decay(X_vec[period_indices], X_target, tau, t_vec - t_change_vec[period_indices])
+  }
+}
+```
+
+For visualization purposes, it's also useful to have an analogous function that simply shows the input treatments over time:
+
+```{r}
+make_treatment_function <- function(t_change_vec, treatment_vec) {
+  # Put an extra treatment on the end so length(t_change_vec) == length(treatment_vec)
+  treatment_vec <- c(treatment_vec, treatment_vec[length(treatment_vec)])
+  
+  approxfun(t_change_vec, treatment_vec, method = 'constant')
+}
+```
+
+Here's an example of constructing and using an effect function:
+
+```{r}
+X_initial <- 3
+t_change_vec <- c(0, 1, 2, 3, 4)
+E <- 5
+treatment_vec <- c(0, 1, 1, 0)
+tau0 <- 0.1
+tau1 <- 0.5
+test_X_func <- make_effect_function(X_initial, t_change_vec, treatment_vec, E, tau0, tau1)
+t_vec <- seq(0, 4, 0.01)
+X_vec <- test_X_func(t_vec)
+plot(t_vec, X_vec, type = 'l')
+
+test_T_func <- make_treatment_function(t_change_vec, treatment_vec)
+T_vec <- test_T_func(t_vec)
+lines(t_vec, E * T_vec, type = 'l', lty=2)
+abline(v = t_change_vec, lty=3)
+```
+
+## Baseline function
+
+The baseline function, by default, is a Brownian motion/Wiener process:
+
+```{r}
+make_brownian_baseline_function <- function(B_initial, noise_sd, t_initial, t_final, dt) {
+  t_vec <- seq(t_initial, t_final, dt)
+  B_vec <- c(B_initial, B_initial + cumsum(rnorm(length(t_vec) - 1, mean = 0, sd = noise_sd * sqrt(dt))))
+  approxfun(t_vec, B_vec, method = 'linear')
+}
+```
+
+```{r}
+B_func <- make_brownian_baseline_function(160, 1.0, 0, 120, 0.01)
+t_vec <- seq(0, 120, 0.05)
+plot(t_vec, B_func(t_vec), type = 'l', ylim = c(100, 170))
+```
+
+## Simulator
+
+This general-purpose simulator takes model parameters, including treatments over time and an arbitrary baseline function, simulates the model state, and returns a list containing interpolating functions $B$, a list of $T$s, a list of $X$s, and $Z$.
 
 ```{r}
 simulate_general <- function(
   t_change_vec, # Sorted vector of simulation change times.
                 # t_vec[1] is the start time; t_vec[length(t_vec)] is the end time;
                 # intermediate times correspond to treatment changes.
-  t_samp_vec,   # Vector of sampling times.
   B_func,       # Function that returns the baseline B at a particular time.
-                # Must be valid i
-                # May be constructed from a deterministic or stochastic simulation using `approxfun`.
   E_vec,        # Vector of effect sizes for treatments. length(E_vec) is the number of treatments.
-  T_mat,       # Vector of treatments. ncol(T_mat) == nrow(E_vec). nrow(T_mat) == length(t_vec) - 1.
+  T_mat,        # Matrix of treatments for each time period. ncol(T_mat) == nrow(E_vec). nrow(T_mat) == length(t_vec) - 1.
                 # T_vec[i, j] == 1 (0) if treatment j is active (inactive) from time t_vec[i] to t_vec[i + 1].
-  tau,           # Simulation timestep
+  tau0_vec,     # Vector of time constants for deactivation of treatments
+  tau1_vec,     # Vector of time constants for activation of treatments
+  alpha,        # Timescale of outcome variable response to effects
+  sigma_Z,      # S.D. of process noise for outcome variable
+  dt,           # Simulation timestep
   X_initial_vec = NA, # Initial values of effects. length(X_initial_vec) == length(E_vec)
-  Z_initial = NA     # Initial value of outcome.
+  Z_initial = NA      # Initial value of outcome.
 ) {
   stopifnot(all(is.finite(t_change_vec)))
   stopifnot(all(t_change_vec == sort(t_change_vec)))
   stopifnot(all(is.finite(B_func(t_change_vec))))
   
+  n_periods <- length(t_change_vec) - 1
   t_initial = t_change_vec[1]
-  t_final = t_change_vec[length(t_change_vec)]
+  t_final = t_change_vec[n_periods + 1]
   
   stopifnot(all(is.finite(E_vec)))
   
   n_treatments = length(E_vec)
   
   stopifnot(all((T_mat == 0) | (T_mat == 1)))
-  stopifnot(length(tau) == 1 && tau > 0)
-  
-  stopifnot(all(is.finite(t_samp_vec)))
-  stopifnot(all(t_samp_vec >= t_initial))
-  stopifnot(all(t_samp_vec <= t_final))
+  stopifnot(length(dt) == 1 && dt > 0)
   
   if(is.na(X_initial_vec)) {
     X_initial_vec <- rep(0, n_treatments)
@@ -65,7 +191,7 @@ simulate_general <- function(
   T_mat <- cbind(T_mat, T_mat[,ncol(T_mat)])
   
   # Actual simulation timesteps
-  t_vec <- seq(t_initial, t_final, tau)
+  t_vec <- seq(t_initial, t_final, dt)
   n_t <- length(t_vec)
   if(t_vec[length(t_vec)] < t_final) {
     t_vec <- c(t_vec, t_final)
@@ -74,36 +200,130 @@ simulate_general <- function(
   # Baseline evaluated at all simulation timesteps
   B_vec <- B_func(t_vec)
   
-  # Allocate state variables
-  X <- matrix(0, nrow = n_t, ncol = n_treatments)
-  X[1,] <- X_initial_vec
-  Z <- numeric(n_t)
-  Z[1] <- Z_initial
+  # Treatment functions (just to return for convenience)
+  T_funcs <- lapply(1:n_treatments, function(j) {
+    make_treatment_function(t_change_vec, T_mat[1:n_periods,j])
+  })
   
-  plot(t_vec, B_vec, type = 'l')
+  # Deterministic effect process functions
+  X_funcs <- lapply(1:n_treatments, function(i) {
+    make_effect_function(X_initial_vec[i], t_change_vec, T_mat[,i], E_vec[i], tau0_vec[i], tau1_vec[i])
+  })
+  
+  # Effects evaluated at all simulation timesteps (one effect per column)
+  X_mat <- do.call(cbind, lapply(X_funcs, function(X_func) X_func(t_vec)))
+  
+  # Draw process noise for simulation steps
+  Z_noise <- rnorm(n_t - 1, sd = sigma_Z * sqrt(dt))
+  
+  # Simulate outcome
+  Z_vec <- numeric(n_t)
+  Z_vec[1] <- Z_initial
+  for(i in 1:(n_t - 1)) {
+    Z_vec[i+1] <- exponential_decay(Z_vec[i], B_vec[i] + sum(X_mat[i,]), 1.0 / alpha, dt) + Z_noise[i]
+  }
+  Z_func <- approxfun(t_vec, Z_vec, method = 'linear')
+  
+  list(
+    B_func = B_func,
+    T_funcs = T_funcs,
+    X_funcs = X_funcs,
+    Z_func = Z_func
+  )
+}
+```
+
+
+```{r}
+t_change_vec <- seq(0, 120, 30)
+B_func <- make_brownian_baseline_function(160, 0.4, 0, 120, 0.01)
+E_vec <- c(-40, -30)
+T_mat <- matrix(c(
+  0, 1, 1, 0,
+  1, 0, 0, 1
+), ncol = 2, byrow = FALSE)
+tau0_vec <- c(3.0, 1.0)
+tau1_vec <-  c(6.0, 2.0)
+alpha <- 0.5
+sigma_Z <- 1.0
+dt <- 0.01
+```
+
+```{r}
+result <- simulate_general(t_change_vec,  B_func, E_vec, T_mat, tau0_vec, tau1_vec, alpha, sigma_Z, dt)
+```
+
+```{r}
+t_samp_vec <- seq(0, 120, 1)
+plot(t_samp_vec, result$T_funcs[[1]](t_samp_vec), type = 'l', ylab = 'treatments')
+lines(t_samp_vec, result$T_funcs[[2]](t_samp_vec), lty = 2)
+```
+
+```{r}
+plot(t_samp_vec, result$X_funcs[[1]](t_samp_vec), type = 'l', ylab = 'treatment effects', ylim = c(0, -40))
+lines(t_samp_vec, result$X_funcs[[2]](t_samp_vec), lty = 2)
+```
+
+```{r}
+plot(t_samp_vec, result$B_func(t_samp_vec), type = 'l', ylim = c(100, 160), ylab = 'systolic blood pressure')
+lines(t_samp_vec, result$Z_func(t_samp_vec))
+```
+
+
+## Observations
+
+Observations are simply normal noise on top of simulated outcomes:
+
+```{r}
+observe_outcome <- function(Z_func, t_obs_vec, sigma_obs) {
+  Z_func(t_obs_vec) + rnorm(length(t_obs_vec), sd = sigma_obs)
 }
 ```
 
 ```{r}
-t_change_vec <- seq(0, 2, 0.1)
-t_samp_vec <- seq(0, 2, 0.5)
-t_B_vec <- seq(0, 2, 0.05)
-B_vec <- 160 + c(0, cumsum(rnorm(length(t_B_vec) - 1, sd = 0.1)))
-B_func <- approxfun(t_B_vec, B_vec, method = 'linear')
-E_vec <- c(1, 2)
-T_mat <- matrix(rbinom(length(E_vec) * (length(t_change_vec) - 1), 1, 0.5), ncol = length(E_vec))
-tau <- 0.005
-simulate_general(t_change_vec, t_samp_vec, B_func, E_vec, T_mat, tau)
+t_obs_vec <- seq(0, 120, 1)
+sigma_obs <- 4.0
+Z_obs_vec <- observe_outcome(result$Z_func, t_obs_vec, sigma_obs)
+plot(t_obs_vec, Z_obs_vec, ylim = c(100, 160))
+lines(t_obs_vec, result$Z_func(t_obs_vec))
+```
+
+Observation times can be arbitrary continuous values between timesteps if you like:
+
+```{r}
+t_obs_vec_weird <- sort(runif(120, min = 0, max = 120))
+Z_obs_vec_weird <- observe_outcome(result$Z_func, t_obs_vec_weird, sigma_obs)
+plot(t_obs_vec_weird, Z_obs_vec_weird, ylim = c(100, 160))
+lines(t_obs_vec_weird, result$Z_func(t_obs_vec_weird))
+```
+
+## Transformations
+
+TODO
+
+## Speed
+
+Fine. 0.06 seconds for dt = 0.01. 0.8 seconds for dt = 0.001.
+
+```{r}
+t_change_vec <- seq(0, 120, 30)
+B_func <- make_brownian_baseline_function(160, 0.4, 0, 120, 0.01)
+E_vec <- c(-40, -30)
+T_mat <- matrix(c(
+  0, 1, 1, 0,
+  1, 0, 0, 1
+), ncol = 2, byrow = FALSE)
+tau0_vec <- c(3.0, 1.0)
+tau1_vec <-  c(6.0, 2.0)
+alpha <- 0.5
+sigma_Z <- 1.0
 ```
 
 ```{r}
-simulate_default <- function(t_end, n_blocks)
+sapply(c(0.1, 0.01, 0.001), function(dt) {
+  system.time({
+    simulate_general(t_change_vec,  B_func, E_vec, T_mat, tau0_vec, tau1_vec, alpha, sigma_Z, dt)
+  })
+})
 ```
 
-## Reproduction of Figure 1
-
-```{r pressure}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
