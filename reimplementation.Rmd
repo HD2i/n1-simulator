@@ -1,0 +1,109 @@
+---
+title: "Reimplementation of Simulator"
+author: "Ed Baskerville"
+date: "4/19/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Implementation of model
+
+```{r}
+simulate_general <- function(
+  t_change_vec, # Sorted vector of simulation change times.
+                # t_vec[1] is the start time; t_vec[length(t_vec)] is the end time;
+                # intermediate times correspond to treatment changes.
+  t_samp_vec,   # Vector of sampling times.
+  B_func,       # Function that returns the baseline B at a particular time.
+                # Must be valid i
+                # May be constructed from a deterministic or stochastic simulation using `approxfun`.
+  E_vec,        # Vector of effect sizes for treatments. length(E_vec) is the number of treatments.
+  T_mat,       # Vector of treatments. ncol(T_mat) == nrow(E_vec). nrow(T_mat) == length(t_vec) - 1.
+                # T_vec[i, j] == 1 (0) if treatment j is active (inactive) from time t_vec[i] to t_vec[i + 1].
+  tau,           # Simulation timestep
+  X_initial_vec = NA, # Initial values of effects. length(X_initial_vec) == length(E_vec)
+  Z_initial = NA     # Initial value of outcome.
+) {
+  stopifnot(all(is.finite(t_change_vec)))
+  stopifnot(all(t_change_vec == sort(t_change_vec)))
+  stopifnot(all(is.finite(B_func(t_change_vec))))
+  
+  t_initial = t_change_vec[1]
+  t_final = t_change_vec[length(t_change_vec)]
+  
+  stopifnot(all(is.finite(E_vec)))
+  
+  n_treatments = length(E_vec)
+  
+  stopifnot(all((T_mat == 0) | (T_mat == 1)))
+  stopifnot(length(tau) == 1 && tau > 0)
+  
+  stopifnot(all(is.finite(t_samp_vec)))
+  stopifnot(all(t_samp_vec >= t_initial))
+  stopifnot(all(t_samp_vec <= t_final))
+  
+  if(is.na(X_initial_vec)) {
+    X_initial_vec <- rep(0, n_treatments)
+  }
+  else {
+    stopifnot(length(X_initial_vec) == n_treatments)
+    stopifnot(all(is.finite(X_initial_vec)))
+  }
+  
+  if(is.na(Z_initial)) {
+    Z_initial <- B_func(t_initial)
+  }
+  else {
+    stopifnot(length(Z_initial_vec) == 1)
+    stopifnot(is.finite(Z_initial_vec))
+  }
+  
+  # Extend last treatment row to final time, so now nrow(T_mat) == length(t_vec)
+  T_mat <- cbind(T_mat, T_mat[,ncol(T_mat)])
+  
+  # Actual simulation timesteps
+  t_vec <- seq(t_initial, t_final, tau)
+  n_t <- length(t_vec)
+  if(t_vec[length(t_vec)] < t_final) {
+    t_vec <- c(t_vec, t_final)
+  }
+  
+  # Baseline evaluated at all simulation timesteps
+  B_vec <- B_func(t_vec)
+  
+  # Allocate state variables
+  X <- matrix(0, nrow = n_t, ncol = n_treatments)
+  X[1,] <- X_initial_vec
+  Z <- numeric(n_t)
+  Z[1] <- Z_initial
+  
+  plot(t_vec, B_vec, type = 'l')
+}
+```
+
+```{r}
+t_change_vec <- seq(0, 2, 0.1)
+t_samp_vec <- seq(0, 2, 0.5)
+t_B_vec <- seq(0, 2, 0.05)
+B_vec <- 160 + c(0, cumsum(rnorm(length(t_B_vec) - 1, sd = 0.1)))
+B_func <- approxfun(t_B_vec, B_vec, method = 'linear')
+E_vec <- c(1, 2)
+T_mat <- matrix(rbinom(length(E_vec) * (length(t_change_vec) - 1), 1, 0.5), ncol = length(E_vec))
+tau <- 0.005
+simulate_general(t_change_vec, t_samp_vec, B_func, E_vec, T_mat, tau)
+```
+
+```{r}
+simulate_default <- function(t_end, n_blocks)
+```
+
+## Reproduction of Figure 1
+
+```{r pressure}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
