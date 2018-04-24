@@ -140,7 +140,7 @@ plot(t_vec, B_func(t_vec), type = 'l', ylim = c(100, 170))
 This general-purpose simulator takes model parameters, including treatments over time and an arbitrary baseline function, simulates the model state, and returns a list containing interpolating functions $B$, a list of $T$s, a list of $X$s, and $Z$.
 
 ```{r}
-simulate_general <- function(
+n1_simulate_general <- function(
   t_change_vec, # Sorted vector of simulation change times.
                 # t_vec[1] is the start time; t_vec[length(t_vec)] is the end time;
                 # intermediate times correspond to treatment changes.
@@ -150,7 +150,7 @@ simulate_general <- function(
                 # T_vec[i, j] == 1 (0) if treatment j is active (inactive) from time t_vec[i] to t_vec[i + 1].
   tau0_vec,     # Vector of time constants for deactivation of treatments
   tau1_vec,     # Vector of time constants for activation of treatments
-  alpha,        # Timescale of outcome variable response to effects
+  tc_outcome,   # Timescale of outcome variable response to effects
   sigma_Z,      # S.D. of process noise for outcome variable
   dt,           # Simulation timestep
   X_initial_vec = NA, # Initial values of effects. length(X_initial_vec) == length(E_vec)
@@ -220,7 +220,7 @@ simulate_general <- function(
   Z_vec <- numeric(n_t)
   Z_vec[1] <- Z_initial
   for(i in 1:(n_t - 1)) {
-    Z_vec[i+1] <- exponential_decay(Z_vec[i], B_vec[i] + sum(X_mat[i,]), 1.0 / alpha, dt) + Z_noise[i]
+    Z_vec[i+1] <- exponential_decay(Z_vec[i], B_vec[i] + sum(X_mat[i,]), tc_outcome, dt) + Z_noise[i]
   }
   Z_func <- approxfun(t_vec, Z_vec, method = 'linear')
   
@@ -244,13 +244,13 @@ T_mat <- matrix(c(
 ), ncol = 2, byrow = FALSE)
 tau0_vec <- c(3.0, 1.0)
 tau1_vec <-  c(6.0, 2.0)
-alpha <- 0.5
+tc_outcome <- 2.0
 sigma_Z <- 1.0
 dt <- 0.01
 ```
 
 ```{r}
-result <- simulate_general(t_change_vec,  B_func, E_vec, T_mat, tau0_vec, tau1_vec, alpha, sigma_Z, dt)
+result <- n1_simulate_general(t_change_vec,  B_func, E_vec, T_mat, tau0_vec, tau1_vec, tc_outcome, sigma_Z, dt)
 ```
 
 ```{r}
@@ -275,7 +275,7 @@ lines(t_samp_vec, result$Z_func(t_samp_vec))
 Observations are simply normal noise on top of simulated outcomes:
 
 ```{r}
-observe_outcome <- function(Z_func, t_obs_vec, sigma_obs) {
+n1_observe_outcome <- function(Z_func, t_obs_vec, sigma_obs) {
   Z_func(t_obs_vec) + rnorm(length(t_obs_vec), sd = sigma_obs)
 }
 ```
@@ -283,7 +283,7 @@ observe_outcome <- function(Z_func, t_obs_vec, sigma_obs) {
 ```{r}
 t_obs_vec <- seq(0, 120, 1)
 sigma_obs <- 4.0
-Z_obs_vec <- observe_outcome(result$Z_func, t_obs_vec, sigma_obs)
+Z_obs_vec <- n1_observe_outcome(result$Z_func, t_obs_vec, sigma_obs)
 plot(t_obs_vec, Z_obs_vec, ylim = c(100, 160))
 lines(t_obs_vec, result$Z_func(t_obs_vec))
 ```
@@ -292,7 +292,7 @@ Observation times can be arbitrary continuous values between timesteps if you li
 
 ```{r}
 t_obs_vec_weird <- sort(runif(120, min = 0, max = 120))
-Z_obs_vec_weird <- observe_outcome(result$Z_func, t_obs_vec_weird, sigma_obs)
+Z_obs_vec_weird <- n1_observe_outcome(result$Z_func, t_obs_vec_weird, sigma_obs)
 plot(t_obs_vec_weird, Z_obs_vec_weird, ylim = c(100, 160))
 lines(t_obs_vec_weird, result$Z_func(t_obs_vec_weird))
 ```
@@ -315,15 +315,171 @@ T_mat <- matrix(c(
 ), ncol = 2, byrow = FALSE)
 tau0_vec <- c(3.0, 1.0)
 tau1_vec <-  c(6.0, 2.0)
-alpha <- 0.5
+tc_outcome <- 2.0
 sigma_Z <- 1.0
 ```
 
 ```{r}
 sapply(c(0.1, 0.01, 0.001), function(dt) {
   system.time({
-    simulate_general(t_change_vec,  B_func, E_vec, T_mat, tau0_vec, tau1_vec, alpha, sigma_Z, dt)
+    n1_simulate_general(t_change_vec,  B_func, E_vec, T_mat, tau0_vec, tau1_vec, tc_outcome, sigma_Z, dt)
   })
 })
+```
+
+
+## Simplified data generation
+
+This function is a simplified interface for data generation for a single simulation that matches the parameters in the paper.
+It is less flexible than the general-purpose simulator, imposing the following restrictions:
+
+* The function returns an R data frame with observations and underlying state variables reported at a fixed interval.
+* The baseline trajectory is simulated as a discretized Brownian motion rather than an arbitrary user-provided function.
+* Treatment periods are of a fixed duration.
+* Treatments are provided as a vector of integers in `1:n_treatments`, so only one treatment is active at a time.
+
+```{r}
+randomize_treatments_by_block <- function(n_blocks, n_treatments) {
+  do.call(rbind, lapply(1:n_blocks, function(i) sample(1:n_treatments)))
+}
+
+treatment_mat_by_block_to_binary <- function(mat_by_block) {
+  do.call(
+    rbind,
+    lapply(1:nrow(mat_by_block), function(i) diag(ncol(mat_by_block))[mat_by_block[i,],])
+  )
+}
+
+
+n1_simulate <- function(
+  n_blocks, n_treatments,
+  
+  baseline_initial, effect_size_vec,
+  tc_in_vec, tc_out_vec, tc_outcome,
+  
+  sd_baseline, sd_outcome, sd_obs,
+  
+  treatment_period,
+  sampling_timestep,
+  noise_timestep,
+  
+  treatment_mat_by_block = NA,
+  random_seed = NA
+) {
+  study_duration <- n_blocks * n_treatments * treatment_period
+  t_change_vec <- seq(0, study_duration, treatment_period)
+  n_periods <- length(t_change_vec) - 1
+  
+  if(is.na(treatment_mat_by_block)) {
+    treatment_mat_by_block <- randomize_treatments_by_block(n_blocks, n_treatments)
+  }
+  treatment_mat <- treatment_mat_by_block_to_binary(treatment_mat_by_block)
+  
+  baseline_func <- make_brownian_baseline_function(baseline_initial, sd_baseline, 0, study_duration, noise_timestep)
+  
+  result <- n1_simulate_general(
+    t_change_vec, baseline_func, effect_size_vec, treatment_mat,
+    tc_in_vec, tc_out_vec, tc_outcome,
+    sd_outcome, noise_timestep
+  )
+  
+  t_obs_vec <- seq(0, study_duration, sampling_timestep)
+  outcome_obs_vec <- n1_observe_outcome(result$Z_func, t_obs_vec, sd_obs)
+  
+  data.frame(
+    t = t_obs_vec,
+    outcome = result$Z_func(t_obs_vec),
+    outcome_obs = outcome_obs_vec
+  )
+}
+```
+
+```{r}
+df <- n1_simulate(
+  n_blocks = 1, n_treatments = 2,
+  baseline_initial = 160, effect_size_vec = c(-40, -30),
+  tc_in_vec = c(3, 2), tc_out_vec = c(2, 3), tc_outcome = 1,
+  sd_baseline = 0.4, sd_outcome = 0.6, sd_obs = 4.0,
+  treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05
+)
+plot(df$t, df$outcome, type = 'l')
+```
+
+
+## Parameter sweeps
+
+```{r}
+n1_generate_parameters <- function(
+  study_duration 
+)
+```
+
+```{r}
+n1_run_experiment <- function(
+  n_replicates,
+  
+  n_blocks,
+  n_treatments,
+  
+  baseline_initial,
+  effect_size_vec,
+  tc_in_vec,
+  tc_out_vec,
+  tc_effect_delay,
+  
+  sd_baseline,
+  sd_outcome,
+  sd_obs,
+  
+  treatment_period,
+  sampling_timestep,
+  noise_timestep,
+)
+```
+
+```{r}
+data.frame(
+  trial_id = 1,
+  replicate_id = 1,
+  
+  n_blocks = 4,
+  n_treatments = 2,
+  
+  baseline_initial = 160,
+  
+  effect_size_1 = -40,
+  tc_in_1 = 6,
+  tc_out_1 = 3,
+  
+  effect_size_2 = -30,
+  tc_in_1 = 2,
+  tc_out_1 = 10,
+  
+  tc_effect_delay = 1,
+  
+  
+  sd_baseline = 0.4,
+  sd_outcome = 1.0,
+  sd_obs = 4.0,
+  
+  treatment_period = 30.0,
+  sampling_timestep = 1.0,
+  
+  noise_timestep = 0.01,
+  treatment_order = "1221211212211221",
+  random_seed = 823456782323,
+  
+  effect_size_1_est_m1 = -35.234,
+  effect_size_1_pval_m1 = 0.001,
+  
+  effect_size_1_est_m2 = -37.235,
+  effect_size_1_pval_m2 = 0.5,
+  
+  effect_size_1_est_m3 = -33.534,
+  effect_size_1_pval_m3 = 0.07,
+  
+  effect_size_1_est_m4 = -32.523,
+  effect_size_1_pval_m4 = 0.09
+)
 ```
 
