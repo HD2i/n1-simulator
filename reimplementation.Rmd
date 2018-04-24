@@ -350,6 +350,10 @@ treatment_mat_by_block_to_binary <- function(mat_by_block) {
   )
 }
 
+treatment_mat_binary_to_vec <- function(mat) {
+  apply(mat, 1, function(row) which(as.logical(row)))
+}
+
 
 n1_simulate <- function(
   n_blocks, n_treatments,
@@ -362,6 +366,8 @@ n1_simulate <- function(
   treatment_period,
   sampling_timestep,
   noise_timestep,
+  
+  return_data_frame = TRUE,
   
   treatment_mat_by_block = NA,
   random_seed = NA
@@ -386,11 +392,50 @@ n1_simulate <- function(
   t_obs_vec <- seq(0, study_duration, sampling_timestep)
   outcome_obs_vec <- n1_observe_outcome(result$Z_func, t_obs_vec, sd_obs)
   
-  data.frame(
-    t = t_obs_vec,
-    outcome = result$Z_func(t_obs_vec),
-    outcome_obs = outcome_obs_vec
-  )
+  treatment_mat_t_obs_binary <- do.call(cbind, lapply(result$T_funcs, function(T_func) T_func(t_obs_vec)))
+  treatment_vec_t_obs <- treatment_mat_binary_to_vec(treatment_mat_t_obs_binary)
+  
+  effect_mat <- do.call(cbind, lapply(result$X_funcs, function(X_func) X_func(t_obs_vec)))
+  effect_vec <- apply(effect_mat, 1, sum)
+  
+  outcome_vec <- result$Z_func(t_obs_vec)
+  if(return_data_frame) {
+    # Construct data frame with a separate effect column for each treatment
+    do.call(data.frame, c(
+      list(
+        t = t_obs_vec,
+        treatment = treatment_vec_t_obs
+      ),
+      setNames(
+        lapply(1:n_treatments, function(i) treatment_mat_t_obs_binary[,i]),
+        sapply(1:n_treatments, function(i) sprintf("treatment_%d", i))
+      ),
+      list(
+        effect = effect_vec
+      ),
+      setNames(
+        lapply(1:n_treatments, function(i) effect_mat[,i]),
+        sapply(1:n_treatments, function(i) sprintf("effect_%d", i))
+      ),
+      list(
+        outcome = outcome_vec,
+        outcome_obs = outcome_obs_vec
+      )
+    ))
+  }
+  else {
+    # Construct a named list of time series, but with
+    # the effect columns as a matrix `effect_by_treatment` with length(t_obs_vec) rows and n_treatments columns
+    list(
+      t = t_obs_vec,
+      treatment = treatment_vec_t_obs,
+      treatment_by_treatment = treatment_mat_t_obs_binary,
+      effect = effect_vec,
+      effect_by_treatment = effect_mat,
+      outcome = outcome_vec,
+      outcome_obs = outcome_obs_vec
+    )
+  }
 }
 ```
 
@@ -402,7 +447,34 @@ df <- n1_simulate(
   sd_baseline = 0.4, sd_outcome = 0.6, sd_obs = 4.0,
   treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05
 )
+print(df)
+plot(df$t, df$treatment)
+plot(df$t, df$treatment_1)
+plot(df$t, df$treatment_2)
+plot(df$t, df$effect)
+plot(df$t, df$effect_1)
+plot(df$t, df$effect_2)
 plot(df$t, df$outcome, type = 'l')
+```
+
+```{r}
+result <- n1_simulate(
+  n_blocks = 1, n_treatments = 2,
+  baseline_initial = 160, effect_size_vec = c(-40, -30),
+  tc_in_vec = c(3, 2), tc_out_vec = c(2, 3), tc_outcome = 1,
+  sd_baseline = 0.4, sd_outcome = 0.6, sd_obs = 4.0,
+  treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05,
+  return_data_frame = FALSE
+)
+print(result)
+plot(result$t, result$treatment)
+plot(result$t, result$treatment_by_treatment[,1])
+plot(result$t, result$treatment_by_treatment[,2])
+plot(result$t, result$effect)
+plot(result$t, result$effect_by_treatment[,1])
+plot(result$t, result$effect_by_treatment[,2])
+plot(result$t, result$outcome, type = 'l')
+points(result$t, result$outcome_obs)
 ```
 
 
