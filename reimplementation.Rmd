@@ -354,6 +354,12 @@ treatment_mat_binary_to_vec <- function(mat) {
   apply(mat, 1, function(row) which(as.logical(row)))
 }
 
+matrix_to_column_list <- function(mat, prefix) {
+  setNames(
+    lapply(1:ncol(mat), function(i) mat[,i]),
+    sapply(1:ncol(mat), function(i) sprintf("%s_%d", prefix, i))
+  )
+}
 
 n1_simulate <- function(
   n_blocks, n_treatments,
@@ -390,13 +396,16 @@ n1_simulate <- function(
   )
   
   t_obs_vec <- seq(0, study_duration, sampling_timestep)
-  outcome_obs_vec <- n1_observe_outcome(result$Z_func, t_obs_vec, sd_obs)
+  
+  
   
   treatment_mat_t_obs_binary <- do.call(cbind, lapply(result$T_funcs, function(T_func) T_func(t_obs_vec)))
   treatment_vec_t_obs <- treatment_mat_binary_to_vec(treatment_mat_t_obs_binary)
   
   effect_mat <- do.call(cbind, lapply(result$X_funcs, function(X_func) X_func(t_obs_vec)))
   effect_vec <- apply(effect_mat, 1, sum)
+  
+  outcome_obs_vec <- n1_observe_outcome(result$Z_func, t_obs_vec, sd_obs)
   
   outcome_vec <- result$Z_func(t_obs_vec)
   if(return_data_frame) {
@@ -406,17 +415,11 @@ n1_simulate <- function(
         t = t_obs_vec,
         treatment = treatment_vec_t_obs
       ),
-      setNames(
-        lapply(1:n_treatments, function(i) treatment_mat_t_obs_binary[,i]),
-        sapply(1:n_treatments, function(i) sprintf("treatment_%d", i))
-      ),
+      matrix_to_column_list(treatment_mat_t_obs_binary, "treatment"),
       list(
         effect = effect_vec
       ),
-      setNames(
-        lapply(1:n_treatments, function(i) effect_mat[,i]),
-        sapply(1:n_treatments, function(i) sprintf("effect_%d", i))
-      ),
+      matrix_to_column_list(treatment_mat_t_obs_binary, "effect"),
       list(
         outcome = outcome_vec,
         outcome_obs = outcome_obs_vec
