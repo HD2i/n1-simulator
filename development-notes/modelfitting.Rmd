@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-We'll start by sourcing `n1simulator.R`, and as code is finalized it will move there:
+We'll start by sourcing `n1simulator.R` for simulation functions:
 
 ```{r}
 source('../n1simulator/R/n1simulator.R')
@@ -250,7 +250,90 @@ fit_nmle_noeffect$coefficients$fixed
 
 And extract the p-values:
 ```{r}
-ttable_nmle_noeffect <- summary(fit_nmle_noeffect)$tTable
-print(ttable_nmle_noeffect)
+summ_nmle_noeffect <- summary(fit_nmle_noeffect)$tTable
+print(summ_nmle_noeffect)
 ```
 
+## Reusable functions
+
+We want to return fit results in a standard format, a list containing:
+
+* The raw fit object, because why not
+* A data frame with treatment coefficients and p-values
+* AIC value for the model
+
+This function should do the trick for models 1-3:
+
+```{r}
+format_lm_results <- function(n_treatments, fit_obj) {
+  coeff_summ <- summary(fit_obj)$coefficients
+  list(
+    coefficients = data.frame(
+      estimate = coeff_summ[1:n_treatments,1],
+      pvalue = coeff_summ[1:n_treatments,4]
+    ),
+    fit_obj = fit_obj
+  )
+}
+```
+
+```{r}
+n1_fit_model1 <- function(n_treatments, data) {
+  format_lm_results(n_treatments, lm(outcome_obs ~ factor(treatment), data = data))
+}
+
+n1_fit_model2 <- function(n_treatments, data) {
+  format_lm_results(n_treatments, lm(outcome_obs ~ factor(treatment) + factor(block), data = data))
+}
+
+n1_fit_model3 <- function(n_treatments, data) {
+  format_lm_results(n_treatments, lm(outcome_obs ~ factor(treatment) + t * factor(treatment) + factor(block), data = data))
+}
+```
+
+And this one should work for model 4:
+
+```{r}
+format_lme_results <- function(n_treatments, fit_obj) {
+  coeff_summ <- summary(fit_nmle_noeffect)$tTable
+  list(
+    coefficients = data.frame(
+      estimate = coeff_summ[1:n_treatments,1],
+      pvalue = coeff_summ[1:n_treatments,5]
+    ),
+    fit_obj = fit_obj
+  )
+}
+```
+
+```{r}
+n1_fit_model4 <- function(n_treatments, data) {
+  format_lme_results(n_treatments, lme(fixed = (outcome_obs ~ factor(treatment)), random = (~ 1 | block), data = data))
+}
+```
+
+And one to allow you to choose a model by number:
+
+```{r}
+n1_fit <- function(n_treatments, data, model) {
+  if(model == 1) {
+    n1_fit_model1(n_treatments, data)
+  }
+  else if(model == 2) {
+    n1_fit_model2(n_treatments, data)
+  }
+  else if(model == 3) {
+    n1_fit_model3(n_treatments, data)
+  }
+  else if(model == 4) {
+    n1_fit_model4(n_treatments, data)
+  }
+  else if(is.function(model)) {
+    # User-provided function
+    model(n_treatments, data)
+  }
+  else {
+    NULL
+  }
+}
+```
