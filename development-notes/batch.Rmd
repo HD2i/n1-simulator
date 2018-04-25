@@ -35,8 +35,8 @@ n1_simulate_and_fit <- function(
   
   fits <- lapply(1:4, function(i) n1_fit(n_treatments, data, i))
   list(
-    estimates = do.call(cbind, lapply(fits, function(fit) fit$coefficients[,'estimate'])),
-    pvalues = do.call(cbind, lapply(fits, function(fit) fit$coefficients[,'pvalue']))
+    estimates = do.call(rbind, lapply(fits, function(fit) fit$coefficients[,'estimate'])),
+    pvalues = do.call(rbind, lapply(fits, function(fit) fit$coefficients[,'pvalue']))
   )
 }
 ```
@@ -116,12 +116,12 @@ n1_expand_parameters <- function(
 ```{r}
 params <- n1_expand_parameters(
   n_treatments = 2,
-  n_blocks = 1:6,
+  n_blocks = 4,
   baseline_initial = 160, effect_size = list(-40, c(-30, -20)),
   tc_in = c(3, 2), tc_out = c(2, 3), tc_outcome = 1,
   sd_baseline = 0.4, sd_outcome = 0.6, sd_obs = 2.0,
   treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05,
-  n_replicates = 2
+  n_replicates = 100
 )
 params
 ```
@@ -133,7 +133,58 @@ get_vec_columns <- function(df, prefix, n_cols) {
 ```
 
 ```{r}
-n1_run_experiment <- function(n_treatments, parameters, initial_random_seed = NA, baseline_func = NULL) {
+# Combines a list of list of arrays into a list of arrays,
+# each of which has an extra initial dimension equal to the length of the original outer list.
+# 
+# E.g.: list(list(n_blocks = 1, effect_size = array(c(2,3))), list(n_blocks = 2, effect_size = array(c(4, 5))))
+# becomes something like list(n_blocks = array(c(1, 2)), effect_size = matrix(c(2, 3, 4, 5), byrow=TRUE))
+# 
+# Length-1 numeric vectors are interpreted as 0-dimensional arrays (scalars).
+# Longer numeric vectors are not allowed: they must be 1-dimensional arrays with explicit dimensions
+# (to prevent ambiguity for length-1 numeric vectors).
+combine_arrays  <- function(lla)  {
+  stopifnot(is.list(lla))
+  stopifnot(is.list(lla[[1]]))
+  
+  # Get the initial and final dimensinos
+  dims_initial <- lapply(lla[[1]], function(a) dim(a))
+  dims_combined <- lapply(dims_initial, function(dim_initial) {
+    if(is.null(dim_initial)) {
+      length(lla)
+    }
+    else {
+      c(dim_initial, length(lla))
+    }
+  })
+  
+  # Concatenate inner arrays using c()
+  l_bigv <- do.call(mapply, c(list(c), lla, list(SIMPLIFY = FALSE)))
+  
+  # Turn them into arrays with the right final dimensions
+  l_biga <- lapply(1:length(lla), function(i) {
+    array(l_bigv[[i]], dim = dims_combined[[i]])
+  })
+  
+  # Return list of arrays with original names and last dimension turned into the first
+  setNames(
+    lapply(l_biga, function(a) {
+      ndims <- length(dim(a))
+      aperm(a, if(ndims == 1) 1 else c(ndims, 1:(ndims - 1)))
+    }),
+    names(lla[[1]])
+  )
+}
+```
+
+```{r}
+#n1_run_experiment <- function(n_treatments, parameters, initial_random_seed = NA, baseline_func = NULL) {
+n_treatments <- 2
+parameters <- params[1,]
+initial_random_seed <- NA
+baseline_func <- NULL
+
+
+
   if(is.na(initial_random_seed)) {
     initial_random_seed <- sample(2^31 - 1, 1)
   }
@@ -151,7 +202,7 @@ n1_run_experiment <- function(n_treatments, parameters, initial_random_seed = NA
   lapply(
     trial_ids,
     function(i) {
-      n1_simulate_and_fit(
+      fit_result <- n1_simulate_and_fit(
         p$n_blocks[i], n_treatments,
         p$baseline_initial[i], effect_size_mat[i,],
         tc_in_mat[i,], tc_out_mat[i,], p$tc_outcome[i],
@@ -161,11 +212,63 @@ n1_run_experiment <- function(n_treatments, parameters, initial_random_seed = NA
         random_seed = random_seeds[i],
         baseline_func = baseline_func
       )
+      
+      list(
+        tr
+      )
     }
   )
-}
+#}
 ```
 
+Show in New WindowClear OutputExpand/Collapse Output
+$estimates
+           [,1]      [,2]       [,3]     [,4]
+[1,] 122.632880 122.63301 126.804084 122.0901
+[2,]   6.669978   6.66998  -1.670979  -1.5208
+
+$pvalues
+              [,1]          [,2]          [,3]          [,4]
+[1,] 1.688616e-137 4.196131e-126 3.643588e-106 5.570451e-252
+[2,]  5.649549e-08  6.429057e-08  5.687571e-01  3.552661e-02
+
+Modify Chunk OptionsRun All Chunks AboveRun Current ChunkModify Chunk OptionsRun All Chunks AboveRun Current Chunk
+Show in New WindowClear OutputExpand/Collapse Output
+n_blocks
+<dbl>
+baseline_initial
+<dbl>
+effect_size_1
+<dbl>
+effect_size_2
+<dbl>
+tc_in_1
+<dbl>
+tc_in_2
+<dbl>
+tc_out_1
+<dbl>
+tc_out_2
+<dbl>
+tc_outcome
+<dbl>
+sd_baseline
+<dbl>
+4	160	-40	-30	3	2	2	3	1	0.4	
+4	160	-40	-30	3	2	2	3	1	0.4	
+4	160	-40	-30	3	2	2	3	1	0.4	
+4	160	-40	-30	3	2	2	3	1	0.4	
+4	160	-40	-30	3	2	2	3	1	0.4	
+4	160	-40	-30	3	2	2	3	1	0.4	
+4	160	-40	-30	3	2	2	3	1	0.4	
+4	160	-40	-30	3	2	2	3	1	0.4	
+4	160	-40	-30	3	2	2	3	1	0.4	
+4	160	-40	-30	3	2	2	3	1	0.4	
+Next123456...20Previous
+1-10 of 200 rows | 1-10 of 16 columns
+Modify Chunk OptionsRun All Chunks AboveRun Current ChunkModify Chunk OptionsRun All Chunks AboveRun Current ChunkModify Chunk OptionsRun All Chunks AboveRun Current ChunkModify Chunk OptionsRun All Chunks AboveRun Current ChunkModify Chunk OptionsRun All Chunks AboveRun Current Chunk
+Console~/hd2i/n1-simulator/development-notes/
+			
 
 ```{r}
 system.time(n1_run_experiment(2, params))
