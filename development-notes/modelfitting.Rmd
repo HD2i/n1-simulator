@@ -1,0 +1,256 @@
+---
+title: "Model Fitting for N-of-1 Simulator"
+author: "Ed Baskerville"
+date: "4/24/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+We'll start by sourcing `n1simulator.R`, and as code is finalized it will move there:
+
+```{r}
+source('../n1simulator/R/n1simulator.R')
+```
+
+## Model 1: treatment alone
+
+Let's do a simple simulation:
+
+```{r}
+df <- n1_simulate(
+  n_blocks = 2, n_treatments = 2,
+  baseline_initial = 160, effect_size_vec = c(-40, -30),
+  tc_in_vec = c(3, 2), tc_out_vec = c(2, 3), tc_outcome = 1,
+  sd_baseline = 0.4, sd_outcome = 0.6, sd_obs = 2.0,
+  treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05
+)
+plot(df$t, df$outcome, type = 'l')
+points(df$t, df$outcome_obs)
+```
+
+And fit the simplest possible model:
+
+```{r}
+fit_nofactor <- lm(outcome_obs ~ treatment, data = df)
+print(fit_nofactor)
+```
+
+Since we only have two treatments, that coefficient on treatment is correct even though treatments should be a factor. But it's weird, since the prediction for Treatment 1 is `intercept + 1 * coeff_treatment`.
+
+With a factor, we get the same coefficient but a sensible intercept, and an implied coefficient of 0 for Treatment 1:
+
+```{r}
+fit_factor <- lm(outcome_obs ~ factor(treatment), data = df)
+print(fit_factor)
+```
+
+
+Let's extract treatment coefficients, p-value, and AIC:
+
+```{r}
+print(summary(fit_factor)$coefficients)
+print(extractAIC(fit_factor))
+```
+
+Structured:
+
+```{r}
+summ_fit_factor <- summary(fit_factor)$coefficients
+print(summ_fit_factor)
+```
+
+OK, so our "effect sizes" will just be a sequence relative to Treatment 1. We'll report baseline, coeff(treatment2), coeff(treatment3), etc. and corresponding p-value.
+
+
+Let's try it with more treatments:
+
+```{r}
+df_3treats <- n1_simulate(
+  n_blocks = 2, n_treatments = 3,
+  baseline_initial = 160, effect_size_vec = c(-40, -30, -50),
+  tc_in_vec = c(3, 2, 2), tc_out_vec = c(2, 3, 4), tc_outcome = 1,
+  sd_baseline = 0.4, sd_outcome = 0.6, sd_obs = 2.0,
+  treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05
+)
+fit_3treats <- lm(outcome_obs ~ factor(treatment), data = df_3treats)
+print(fit_3treats)
+```
+
+And that roughly makes sense.
+
+## Model 2: block + treatment
+
+Let's use 3 blocks and 3 treatments so they're both nontrivial:
+
+```{r}
+set.seed(1)
+df_block_treat <- n1_simulate(
+  n_blocks = 3, n_treatments = 3,
+  baseline_initial = 160, effect_size_vec = c(-40, -30, -50),
+  tc_in_vec = c(3, 2, 2), tc_out_vec = c(2, 3, 4), tc_outcome = 1,
+  sd_baseline = 0.4, sd_outcome = 0.6, sd_obs = 2.0,
+  treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05
+)
+fit_block_treat <- lm(outcome_obs ~ factor(treatment) + factor(block), data = df_block_treat)
+plot(df_block_treat$t, df_block_treat$baseline, type = 'l', col = 'green', ylim = c(100, 180))
+lines(df_block_treat$t, df_block_treat$outcome_obs, type = 'l')
+print(fit_block_treat)
+print(summary(fit_block_treat)$coefficients)
+```
+
+Seems reasonable. What if we use a really obvious baseline function:
+
+```{r}
+baseline_func_obvi = approxfun(c(0, 60, 120), c(160, 120, 120), method = 'constant')
+plot(baseline_func_obvi, xlim = c(0, 120))
+```
+
+```{r}
+set.seed(1)
+df_obvi <- n1_simulate(
+  n_blocks = 2, n_treatments = 2,
+  baseline_initial = NA, effect_size_vec = c(-40, -30),
+  tc_in_vec = c(3, 2), tc_out_vec = c(2, 3), tc_outcome = 1,
+  sd_baseline = NA, sd_outcome = 0.6, sd_obs = 2.0,
+  treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05,
+  baseline_func = baseline_func_obvi
+)
+fit_obvi <- lm(outcome_obs ~ factor(treatment) + factor(block), data = df_obvi)
+plot(df_obvi$t, df_obvi$baseline, type = 'l', col = 'green', ylim = c(50, 180))
+lines(df_obvi$t, df_obvi$outcome_obs, type = 'l')
+print(fit_obvi)
+print(summary(fit_obvi)$coefficients)
+```
+
+Looking good.
+
+What if we fit the wrong model? Will AIC tell us which is better?
+
+```{r}
+fit_obvi_noblock <- lm(outcome_obs ~ factor(treatment), data = df_obvi)
+print(fit_obvi_noblock)
+print(summary(fit_obvi_noblock)$coefficients)
+cat(sprintf("AIC correct model: %f\n", extractAIC(fit_obvi))[2])
+cat(sprintf("AIC wrong model: %f\n", extractAIC(fit_obvi_noblock))[2])
+```
+
+Great.
+
+Structured coeff values and p-values:
+
+```{r}
+summ_fit_obvi <- summary(fit_obvi)$coefficients
+print(summ_fit_obvi)
+```
+
+## Model 3: block + treatment + treatment * time
+
+```{r}
+set.seed(1)
+df_trend <- n1_simulate(
+  n_blocks = 2, n_treatments = 3,
+  baseline_initial = 160, effect_size_vec = c(-40, -30, -50),
+  tc_in_vec = c(3, 2, 3), tc_out_vec = c(2, 3, 2), tc_outcome = 1,
+  sd_baseline = 0.4, sd_outcome = 0.6, sd_obs = 2.0,
+  treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05
+)
+fit_trend <- lm(outcome_obs ~ factor(treatment) + factor(treatment) * t + factor(block), data = df_trend)
+print(fit_trend)
+print(summary(fit_trend)$coefficients)
+print(extractAIC(fit_trend))
+```
+
+Looks familiar.
+
+
+## Model 4: linear mixed-effects: blocks
+
+We're gonna need a linear mixed-effect package:
+
+```{r}
+if(!require(lme4)) {
+  install.packages('lme4')
+  library(lme4)
+}
+```
+
+Let's make some data:
+
+```{r}
+set.seed(1)
+df_mixed <- n1_simulate(
+  n_blocks = 3, n_treatments = 3,
+  baseline_initial = 160, effect_size_vec = c(-40, -30, -50),
+  tc_in_vec = c(3, 2, 2), tc_out_vec = c(2, 3, 4), tc_outcome = 1,
+  sd_baseline = 0.4, sd_outcome = 0.6, sd_obs = 2.0,
+  treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05
+)
+plot(df_block_treat$t, df_block_treat$baseline, type = 'l', col = 'green', ylim = c(100, 180))
+lines(df_block_treat$t, df_block_treat$outcome_obs, type = 'l')
+```
+
+What happens if we use the same formula?
+
+```{r}
+fit_mixed <- lmer(outcome_obs ~ factor(block) + factor(treatment), data = df_mixed)
+print(fit_block_treat)
+print(summary(fit_block_treat)$coefficients)
+```
+
+OK, so we need some random effects...
+
+```{r}
+fit_mixed <- lmer(outcome_obs ~ factor(treatment) + (1|block), data = df_mixed)
+print(fit_mixed)
+print(summary(fit_mixed)$coefficients)
+```
+
+No P-values. Why? [Douglas Bates explains.](https://stat.ethz.ch/pipermail/r-help/2006-May/094765.html)
+
+
+How about a different package, `nmle`...
+
+```{r}
+if(!require(nlme)) {
+  install.packages('nlme')
+  library(nlme)
+}
+```
+```{r}
+fit_nlme <- lme(fixed = (outcome_obs ~ factor(treatment)), random = (~ 1 | block), data = df_mixed)
+print(fit_nlme)
+summary(fit_nlme)
+```
+
+Those are very small p-values. Do they make sense if the data is worse?
+
+```{r}
+set.seed(1)
+df_nmle_noeffect <- n1_simulate(
+  n_blocks = 3, n_treatments = 3,
+  baseline_initial = 160, effect_size_vec = c(-40, -40, -40),
+  tc_in_vec = c(3, 2, 2), tc_out_vec = c(2, 3, 4), tc_outcome = 1,
+  sd_baseline = 0.4, sd_outcome = 0.6, sd_obs = 2.0,
+  treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05
+)
+fit_nmle_noeffect <- lme(fixed = (outcome_obs ~ factor(treatment)), random = (~ 1 | block), data = df_nmle_noeffect)
+summary(fit_nmle_noeffect)
+```
+
+OK cool. Not significant.
+
+Let's extract the intercept+treatment coefficients:
+
+```{r}
+fit_nmle_noeffect$coefficients$fixed
+```
+
+And extract the p-values:
+```{r}
+ttable_nmle_noeffect <- summary(fit_nmle_noeffect)$tTable
+print(ttable_nmle_noeffect)
+```
+
