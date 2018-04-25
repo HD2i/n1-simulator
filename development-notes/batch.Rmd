@@ -223,7 +223,8 @@ n1_run_experiment <- function(n_treatments, parameters, initial_random_seed = NA
       treatment_period = array(p$treatment_period),
       sampling_timestep = array(p$sampling_timestep),
       noise_timestep = array(p$noise_timestep),
-      replicate_id = array(p$replicate_id)
+      replicate_id = array(p$replicate_id),
+      random_seed = array(random_seeds)
     ),
     combine_arrays(fit_results)
   )
@@ -241,10 +242,6 @@ params <- n1_expand_parameters(
   treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05,
   n_replicates = 100
 )
-results <- n1_run_experiment(2, params, initial_random_seed = NA, baseline_func = NULL)
-```
-			
-
-```{r}
 system.time(n1_run_experiment(2, params))
 ```
+
