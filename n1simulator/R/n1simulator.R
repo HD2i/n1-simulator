@@ -228,6 +228,8 @@ n1_simulate <- function(
 
   block_vec_t_obs <- block_func(t_obs_vec)
 
+  baseline_vec_t_obs <- baseline_func(t_obs_vec)
+
   treatment_mat_t_obs_binary <- do.call(cbind, lapply(result$T_funcs, function(T_func) T_func(t_obs_vec)))
   treatment_vec_t_obs <- treatment_mat_binary_to_vec(treatment_mat_t_obs_binary)
 
@@ -243,6 +245,7 @@ n1_simulate <- function(
       list(
         t = t_obs_vec,
         block = block_vec_t_obs,
+        baseline = baseline_vec_t_obs,
         treatment = treatment_vec_t_obs
       ),
       matrix_to_column_list(treatment_mat_t_obs_binary, "treatment"),
@@ -262,6 +265,7 @@ n1_simulate <- function(
     list(
       t = t_obs_vec,
       block = block_vec_t_obs,
+      baseline = baseline_vec_t_obs,
       treatment = treatment_vec_t_obs,
       treatment_by_treatment = treatment_mat_t_obs_binary,
       effect = effect_vec,
