@@ -207,6 +207,10 @@ n1_simulate <- function(
   t_change_vec <- seq(0, study_duration, treatment_period)
   n_periods <- length(t_change_vec) - 1
 
+  # Construct function to return block number as a function of time
+  block_vec <- c(unlist(lapply(1:n_blocks, function(i) rep(i, n_treatments))), n_blocks)
+  block_func <- approxfun(t_change_vec, block_vec, method = 'constant')
+
   if(is.na(treatment_mat_by_block)) {
     treatment_mat_by_block <- randomize_treatments_by_block(n_blocks, n_treatments)
   }
@@ -214,13 +218,15 @@ n1_simulate <- function(
 
   baseline_func <- make_brownian_baseline_function(baseline_initial, sd_baseline, 0, study_duration, noise_timestep)
 
-  result <- n1_simulate_general(
+  result <- n1_simulate_functions(
     t_change_vec, baseline_func, effect_size_vec, treatment_mat,
     tc_in_vec, tc_out_vec, tc_outcome,
     sd_outcome, noise_timestep
   )
 
   t_obs_vec <- seq(0, study_duration, sampling_timestep)
+
+  block_vec_t_obs <- block_func(t_obs_vec)
 
   treatment_mat_t_obs_binary <- do.call(cbind, lapply(result$T_funcs, function(T_func) T_func(t_obs_vec)))
   treatment_vec_t_obs <- treatment_mat_binary_to_vec(treatment_mat_t_obs_binary)
@@ -236,6 +242,7 @@ n1_simulate <- function(
     do.call(data.frame, c(
       list(
         t = t_obs_vec,
+        block = block_vec_t_obs,
         treatment = treatment_vec_t_obs
       ),
       matrix_to_column_list(treatment_mat_t_obs_binary, "treatment"),
@@ -254,6 +261,7 @@ n1_simulate <- function(
     # the effect columns as a matrix `effect_by_treatment` with length(t_obs_vec) rows and n_treatments columns
     list(
       t = t_obs_vec,
+      block = block_vec_t_obs,
       treatment = treatment_vec_t_obs,
       treatment_by_treatment = treatment_mat_t_obs_binary,
       effect = effect_vec,
