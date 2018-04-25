@@ -201,7 +201,9 @@ n1_simulate <- function(
   return_data_frame = TRUE,
 
   treatment_mat_by_block = NA,
-  random_seed = NA
+  random_seed = NA,
+
+  baseline_func = NULL
 ) {
   study_duration <- n_blocks * n_treatments * treatment_period
   t_change_vec <- seq(0, study_duration, treatment_period)
@@ -216,7 +218,9 @@ n1_simulate <- function(
   }
   treatment_mat <- treatment_mat_by_block_to_binary(treatment_mat_by_block)
 
-  baseline_func <- make_brownian_baseline_function(baseline_initial, sd_baseline, 0, study_duration, noise_timestep)
+  if(is.null(baseline_func)) {
+    baseline_func <- make_brownian_baseline_function(baseline_initial, sd_baseline, 0, study_duration, noise_timestep)
+  }
 
   result <- n1_simulate_functions(
     t_change_vec, baseline_func, effect_size_vec, treatment_mat,
