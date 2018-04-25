@@ -1,0 +1,172 @@
+---
+title: "Batch mode notes"
+author: "Ed Baskerville"
+date: "4/24/2018"
+output: html_document
+---
+
+We'll need simulation and fitting components:
+
+```{r}
+source('../n1simulator/R/simulation.R')
+source('../n1simulator/R/fitting.R')
+```
+
+Each run in batch mode will require us to simulate and fit all 4 models:
+
+```{r}
+n1_simulate_and_fit <- function(
+  n_blocks, n_treatments,
+  baseline_initial, effect_size_vec,
+  tc_in_vec, tc_out_vec, tc_outcome,
+  sd_baseline, sd_outcome, sd_obs,
+  treatment_period, sampling_timestep, noise_timestep,
+  treatment_mat_by_block = NULL,
+  random_seed = NA,
+  baseline_func = NULL
+) {
+  data <- n1_simulate(
+    n_blocks, n_treatments, baseline_initial, effect_size_vec, tc_in_vec, tc_out_vec, tc_outcome,
+    sd_baseline, sd_outcome, sd_obs,
+    treatment_period, sampling_timestep, noise_timestep,
+    return_data_frame = TRUE, treatment_mat_by_block,
+    random_seed, baseline_func
+  )
+  
+  fits <- lapply(1:4, function(i) n1_fit(n_treatments, data, i))
+  list(
+    estimates = do.call(cbind, lapply(fits, function(fit) fit$coefficients[,'estimate'])),
+    pvalues = do.call(cbind, lapply(fits, function(fit) fit$coefficients[,'pvalue']))
+  )
+}
+```
+
+Let's test it:
+
+```{r}
+result <- n1_simulate_and_fit(
+  n_blocks = 2, n_treatments = 2,
+  baseline_initial = 160, effect_size_vec = c(-40, -30),
+  tc_in_vec = c(3, 2), tc_out_vec = c(2, 3), tc_outcome = 1,
+  sd_baseline = 0.4, sd_outcome = 0.6, sd_obs = 2.0,
+  treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05
+)
+result
+```
+
+
+## Generate parameters
+
+For per-treatment parameters, we'll need this function to convert a list of vectors into arguments for `expand.grid`:
+
+```{r}
+paramlist_to_expandargs <- function(paramlist, prefix) {
+  setNames(
+    as.list(paramlist),
+    sapply(1:length(paramlist), function(i) sprintf("%s_%d", prefix, i))
+  )
+}
+```
+
+Here's a function to expand parameters from vectors (and, for per-treatment parameters, lists of vectors) into a data frame:
+
+```{r}
+n1_expand_parameters <- function(
+  n_treatments,
+  n_blocks,
+  baseline_initial, effect_size,
+  tc_in, tc_out, tc_outcome,
+  sd_baseline, sd_outcome, sd_obs,
+  treatment_period, sampling_timestep, noise_timestep,
+  n_replicates
+) {
+  stopifnot(length(n_treatments) == 1)
+  
+  stopifnot(length(effect_size) == n_treatments)
+  stopifnot(length(tc_in) == n_treatments)
+  stopifnot(length(tc_out) == n_treatments)
+  
+  # Produce all combinations of parameters
+  params <- rev(do.call(
+    expand.grid,
+    rev(c(
+      list(
+        n_blocks = n_blocks,
+        baseline_initial = baseline_initial
+      ),
+      paramlist_to_expandargs(effect_size, 'effect_size'),
+      paramlist_to_expandargs(tc_in, 'tc_in'),
+      paramlist_to_expandargs(tc_out, 'tc_out'),
+      list(
+        tc_outcome = tc_outcome,
+        sd_baseline = sd_baseline,
+        sd_obs = sd_obs,
+        sd_outcome = sd_outcome,
+        treatment_period = treatment_period,
+        sampling_timestep = sampling_timestep,
+        noise_timestep = noise_timestep,
+        replicate_id = 1:n_replicates
+      )
+    ))
+  ))
+  params
+}
+```
+
+```{r}
+params <- n1_expand_parameters(
+  n_treatments = 2,
+  n_blocks = 1:6,
+  baseline_initial = 160, effect_size = list(-40, c(-30, -20)),
+  tc_in = c(3, 2), tc_out = c(2, 3), tc_outcome = 1,
+  sd_baseline = 0.4, sd_outcome = 0.6, sd_obs = 2.0,
+  treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05,
+  n_replicates = 2
+)
+params
+```
+
+```{r}
+get_vec_columns <- function(df, prefix, n_cols) {
+  as.matrix(df[sapply(1:n_cols, function(i) sprintf('%s_%d', prefix, i))])
+}
+```
+
+```{r}
+n1_run_experiment <- function(n_treatments, parameters, initial_random_seed = NA, baseline_func = NULL) {
+  if(is.na(initial_random_seed)) {
+    initial_random_seed <- sample(2^31 - 1, 1)
+  }
+  
+  p <- parameters
+  n_trials <- nrow(p)
+  trial_ids <- 1:n_trials
+  random_seeds <- initial_random_seed:(initial_random_seed + n_trials - 1)
+  
+  effect_size_mat <- get_vec_columns(p, 'effect_size', n_treatments)
+  print(effect_size_mat[1,])
+  tc_in_mat <- get_vec_columns(p, 'tc_in', n_treatments)
+  tc_out_mat <- get_vec_columns(p, 'tc_out', n_treatments)
+  
+  lapply(
+    trial_ids,
+    function(i) {
+      n1_simulate_and_fit(
+        p$n_blocks[i], n_treatments,
+        p$baseline_initial[i], effect_size_mat[i,],
+        tc_in_mat[i,], tc_out_mat[i,], p$tc_outcome[i],
+        p$sd_baseline[i], p$sd_outcome[i], p$sd_obs[i],
+        p$treatment_period[i], p$sampling_timestep[i], p$noise_timestep[i],
+        treatment_mat_by_block = NULL,
+        random_seed = random_seeds[i],
+        baseline_func = baseline_func
+      )
+    }
+  )
+}
+```
+
+
+```{r}
+system.time(n1_run_experiment(2, params))
+```

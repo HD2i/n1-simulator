@@ -9,10 +9,10 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-We'll start by sourcing `n1simulator.R` for simulation functions:
+Let's get the simulation functions:
 
 ```{r}
-source('../n1simulator/R/n1simulator.R')
+source('../n1simulator/R/simulation.R')
 ```
 
 ## Model 1: treatment alone
@@ -283,11 +283,21 @@ n1_fit_model1 <- function(n_treatments, data) {
 }
 
 n1_fit_model2 <- function(n_treatments, data) {
-  format_lm_results(n_treatments, lm(outcome_obs ~ factor(treatment) + factor(block), data = data))
+  if(max(data$block) == 1) {
+    format_lm_results(n_treatments, lm(outcome_obs ~ factor(treatment) + factor(block), data = data))
+  }
+  else {
+    format_lm_results(n_treatments, lm(outcome_obs ~ factor(treatment), data = data))
+  }
 }
 
 n1_fit_model3 <- function(n_treatments, data) {
-  format_lm_results(n_treatments, lm(outcome_obs ~ factor(treatment) + t * factor(treatment) + factor(block), data = data))
+  if(max(data$block) == 1) {
+    format_lm_results(n_treatments, lm(outcome_obs ~ factor(treatment) + t * factor(treatment), data = data))
+  }
+  else {
+    format_lm_results(n_treatments, lm(outcome_obs ~ factor(treatment) + t * factor(treatment) + factor(block), data = data))
+  }
 }
 ```
 
@@ -308,7 +318,12 @@ format_lme_results <- function(n_treatments, fit_obj) {
 
 ```{r}
 n1_fit_model4 <- function(n_treatments, data) {
-  format_lme_results(n_treatments, lme(fixed = (outcome_obs ~ factor(treatment)), random = (~ 1 | block), data = data))
+  if(max(data$block) == 1) {
+    format_lme_results(n_treatments, lme(fixed = (outcome_obs ~ factor(treatment)), random = (~ 1 | block), data = data))
+  }
+  else {
+    format_lm_results(n_treatments, lm(outcome_obs ~ factor(treatment), data = data))
+  }
 }
 ```
 

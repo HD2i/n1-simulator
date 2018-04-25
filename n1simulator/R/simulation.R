@@ -200,11 +200,15 @@ n1_simulate <- function(
 
   return_data_frame = TRUE,
 
-  treatment_mat_by_block = NA,
+  treatment_mat_by_block = NULL,
   random_seed = NA,
 
   baseline_func = NULL
 ) {
+  if(!is.na(random_seed)) {
+    set.seed(random_seed)
+  }
+
   study_duration <- n_blocks * n_treatments * treatment_period
   t_change_vec <- seq(0, study_duration, treatment_period)
   n_periods <- length(t_change_vec) - 1
@@ -213,7 +217,7 @@ n1_simulate <- function(
   block_vec <- c(unlist(lapply(1:n_blocks, function(i) rep(i, n_treatments))), n_blocks)
   block_func <- approxfun(t_change_vec, block_vec, method = 'constant')
 
-  if(is.na(treatment_mat_by_block)) {
+  if(is.null(treatment_mat_by_block)) {
     treatment_mat_by_block <- randomize_treatments_by_block(n_blocks, n_treatments)
   }
   treatment_mat <- treatment_mat_by_block_to_binary(treatment_mat_by_block)
