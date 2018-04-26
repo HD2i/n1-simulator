@@ -10,9 +10,7 @@ library(ggplot2)
 ```
 
 ```{r}
-source('../n1simulator/R/simulation.R')
-source('../n1simulator/R/fitting.R')
-source('../n1simulator/R/batch.R')
+source('../n1-simulator.R')
 ```
 
 

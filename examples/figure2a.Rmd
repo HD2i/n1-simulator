@@ -10,9 +10,7 @@ library(ggplot2)
 ```
 
 ```{r}
-source('../n1simulator/R/simulation.R')
-source('../n1simulator/R/fitting.R')
-source('../n1simulator/R/batch.R')
+source('../n1-simulator.R')
 ```
 
 ```{r}
@@ -50,7 +48,7 @@ if(file.exists(filename)) {
 n_trials <- nrow(results$trial_id)
 df <- data.frame(
   trial_id = results$trial_id,
-  treatment_order = sapply(1:n_trials, function(i) treatment_mat_by_block_to_string(results$treatment_order[i,,])),
+  treatment_order = sapply(1:n_trials, function(i) treatment_mat_by_block_to_string(results$treatment_order[[i]])),
   estimate = sapply(1:n_trials, function(i) results$estimates[i,1,2]),
   pvalue = sapply(1:n_trials, function(i) results$pvalues[i,1,2])
 )
