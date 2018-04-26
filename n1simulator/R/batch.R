@@ -158,16 +158,26 @@ n1_run_experiment <- function(n_treatments, parameters, treatment_mat_by_block =
   tc_out_mat <- get_vec_columns(p, 'tc_out', n_treatments)
   
   # TODO: support sweeping over treatment ordering
-  treatment_order_arr <- aperm(simplify2array(
-    lapply(1:n_trials, function(i) {
-      if(is.null(treatment_mat_by_block)) {
-        randomize_treatments_by_block(p$n_blocks[i], n_treatments)
-      }
-      else {
-        treatment_mat_by_block
-      }
-    })
-  ), c(3, 1, 2))
+  # print(simplify2array(
+  #   lapply(1:n_trials, function(i) {
+  #     if(is.null(treatment_mat_by_block)) {
+  #       randomize_treatments_by_block(p$n_blocks[i], n_treatments)
+  #     }
+  #     else {
+  #       treatment_mat_by_block
+  #     }
+  #   })
+  # )
+  # )
+  
+  treatment_order_list <- lapply(1:n_trials, function(i) {
+    if(is.null(treatment_mat_by_block)) {
+      randomize_treatments_by_block(p$n_blocks[i], n_treatments)
+    }
+    else {
+      treatment_mat_by_block
+    }
+  })
   
   if(cores > 1) {
     library(parallel)
@@ -186,7 +196,7 @@ n1_run_experiment <- function(n_treatments, parameters, treatment_mat_by_block =
         tc_in_mat[i,], tc_out_mat[i,], p$tc_outcome[i],
         p$sd_baseline[i], p$sd_outcome[i], p$sd_obs[i],
         p$treatment_period[i], p$sampling_timestep[i], p$noise_timestep[i],
-        treatment_mat_by_block = treatment_order_arr[i,,],
+        treatment_mat_by_block = treatment_order_list[[i]],
         random_seed = random_seeds[i],
         baseline_func = baseline_func
       )
@@ -210,7 +220,7 @@ n1_run_experiment <- function(n_treatments, parameters, treatment_mat_by_block =
       noise_timestep = array(p$noise_timestep),
       replicate_id = array(p$replicate_id),
       random_seed = array(random_seeds),
-      treatment_order = treatment_order_arr
+      treatment_order = treatment_order_list
     ),
     combine_arrays(fit_results)
   )

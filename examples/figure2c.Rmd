@@ -1,0 +1,63 @@
+---
+title: "Figure 2c"
+author: "Ed Baskerville"
+date: "4/25/2018"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+source('../n1simulator/R/simulation.R')
+source('../n1simulator/R/fitting.R')
+source('../n1simulator/R/batch.R')
+```
+
+```{r}
+filename <- 'f2c_results.Rds'
+if(file.exists(filename)) {
+  results <- readRDS(filename)
+} else {
+  start_time <- Sys.time()
+  results <- n1_expand_parameters_and_run_experiment(
+    n_treatments = 2,
+    n_blocks = 2,
+    baseline_initial = 160,
+    effect_size = c(-40, -30),
+    tc_in = c(6.0, 2.0),
+    tc_out = c(3.0, 10.0),
+    tc_outcome = 2.0,
+    sd_baseline = 2.0,
+    sd_outcome = 1.0,
+    sd_obs = 4.0,
+    treatment_period = c(2, 5, 15, 30, 40, 60, 120),
+    sampling_timestep = 1.0,
+    noise_timestep = 0.05,
+    n_replicates = 100,
+    treatment_mat_by_block = matrix(c(2, 1, 2, 1), nrow=2, byrow = TRUE),
+    initial_random_seed = 1,
+    cores = 2
+  )
+  saveRDS(results, filename)
+  end_time <- Sys.time()
+  print(end_time - start_time)
+}
+```
+
+
+```{r}
+n_trials <- nrow(results$trial_id)
+df <- data.frame(
+  trial_id = results$trial_id,
+  treatment_period = factor(results$treatment_period),
+  estimate = sapply(1:n_trials, function(i) results$estimates[i,1,2]),
+  pvalue = sapply(1:n_trials, function(i) results$pvalues[i,1,2])
+)
+df$significant = df$pvalue < 0.05
+```
+
+```{r}
+ggplot(aes(x = treatment_period, y = estimate, color = significant), data = df) + geom_jitter()
+```
