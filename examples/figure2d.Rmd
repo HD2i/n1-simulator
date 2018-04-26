@@ -13,49 +13,24 @@ library(ggplot2)
 source('../n1-simulator.R')
 ```
 
-
 ```{r}
-expand_parameters_study_duration <- function(
-  n_treatments,
-  n_blocks,
-  baseline_initial, effect_size,
-  tc_in, tc_out, tc_outcome,
-  sd_baseline, sd_outcome, sd_obs,
-  study_duration, sampling_timestep, noise_timestep,
-  n_replicates
-) {
-  stopifnot(length(n_treatments) == 1)
-
-  stopifnot(length(effect_size) == n_treatments)
-  stopifnot(length(tc_in) == n_treatments)
-  stopifnot(length(tc_out) == n_treatments)
-
-  # Produce all combinations of parameters
-  params <- rev(do.call(
-    expand.grid,
-    rev(c(
-      list(
-        n_blocks = n_blocks,
-        baseline_initial = baseline_initial
-      ),
-      paramlist_to_expandargs(effect_size, 'effect_size'),
-      paramlist_to_expandargs(tc_in, 'tc_in'),
-      paramlist_to_expandargs(tc_out, 'tc_out'),
-      list(
-        tc_outcome = tc_outcome,
-        sd_baseline = sd_baseline,
-        sd_obs = sd_obs,
-        sd_outcome = sd_outcome,
-        study_duration = study_duration,
-        sampling_timestep = sampling_timestep,
-        noise_timestep = noise_timestep,
-        replicate_id = 1:n_replicates
-      )
-    ))
-  ))
-  params$treatment_period = params$study_duration / params$n_blocks / n_treatments
-  params
-}
+params <- n1_expand_parameters(
+  n_treatments = 2,
+  n_blocks = 1:6,
+  baseline_initial = 160,
+  effect_size = c(-40, -30),
+  tc_in = c(6.0, 2.0),
+  tc_out = c(3.0, 10.0),
+  tc_outcome = 2.0,
+  sd_baseline = 2.0,
+  sd_outcome = 1.0,
+  sd_obs = 4.0,
+  treatment_period = NA,
+  sampling_timestep = 1.0,
+  noise_timestep = 0.05,
+  n_replicates = 100
+)
+params$treatment_period <- 120.0 / params$n_blocks / 2
 ```
 
 ```{r}
@@ -64,26 +39,9 @@ if(file.exists(filename)) {
   results <- readRDS(filename)
 } else {
   start_time <- Sys.time()
-  params <- expand_parameters_study_duration(
-    n_treatments = 2,
-    n_blocks = 1:6,
-    baseline_initial = 160,
-    effect_size = c(-40, -30),
-    tc_in = c(6.0, 2.0),
-    tc_out = c(3.0, 10.0),
-    tc_outcome = 2.0,
-    sd_baseline = 2.0,
-    sd_outcome = 1.0,
-    sd_obs = 4.0,
-    study_duration = 120,
-    sampling_timestep = 1.0,
-    noise_timestep = 0.05,
-    n_replicates = 100
-  )
   results <- n1_run_experiment(
     n_treatments = 2,
     params,
-    treatment_mat_by_block = NULL,
     initial_random_seed = 1,
     cores = 2
   )

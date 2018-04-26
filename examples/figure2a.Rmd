@@ -14,6 +14,32 @@ source('../n1-simulator.R')
 ```
 
 ```{r}
+params <- n1_expand_parameters(
+    n_treatments = 2,
+    n_blocks = 2,
+    baseline_initial = 160,
+    effect_size = c(-40, -30),
+    tc_in = c(6.0, 2.0),
+    tc_out = c(3.0, 10.0),
+    tc_outcome = 2.0,
+    sd_baseline = 2.0,
+    sd_outcome = 1.0,
+    sd_obs = 4.0,
+    treatment_period = 30.0,
+    sampling_timestep = 1.0,
+    noise_timestep = 0.05,
+    treatment_order = list(
+      c(1, 2, 1, 2),
+      c(1, 2, 2, 1),
+      c(2, 1, 1, 2),
+      c(2, 1, 2, 1)
+    ),
+    n_replicates = 1
+  )
+params
+```
+
+```{r}
 filename <- 'f2a_results.Rds'
 if(file.exists(filename)) {
   results <- readRDS(filename)
@@ -33,7 +59,13 @@ if(file.exists(filename)) {
     treatment_period = 30.0,
     sampling_timestep = 1.0,
     noise_timestep = 0.05,
-    n_replicates = 400,
+    treatment_order = list(
+      c(1, 2, 1, 2),
+      c(1, 2, 2, 1),
+      c(2, 1, 1, 2),
+      c(2, 1, 2, 1)
+    ),
+    n_replicates = 100,
     initial_random_seed = 1,
     cores = 2
   )
@@ -48,7 +80,7 @@ if(file.exists(filename)) {
 n_trials <- nrow(results$trial_id)
 df <- data.frame(
   trial_id = results$trial_id,
-  treatment_order = sapply(1:n_trials, function(i) treatment_mat_by_block_to_string(results$treatment_order[[i]])),
+  treatment_order = sapply(1:n_trials, function(i) treatment_order_mat_to_str(results$treatment_order[i,,])),
   estimate = sapply(1:n_trials, function(i) results$estimates[i,1,2]),
   pvalue = sapply(1:n_trials, function(i) results$pvalues[i,1,2])
 )
