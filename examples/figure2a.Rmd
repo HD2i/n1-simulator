@@ -36,7 +36,8 @@ if(file.exists(filename)) {
     sampling_timestep = 1.0,
     noise_timestep = 0.05,
     n_replicates = 400,
-    initial_random_seed = 1
+    initial_random_seed = 1,
+    cores = 2
   )
   saveRDS(results, filename)
   end_time <- Sys.time()

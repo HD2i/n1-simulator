@@ -7,7 +7,8 @@ n1_expand_parameters_and_run_experiment <- function(
   treatment_period, sampling_timestep, noise_timestep,
   n_replicates,
   treatment_mat_by_block = NULL,
-  initial_random_seed = NA, baseline_func = NULL
+  initial_random_seed = NA, baseline_func = NULL,
+  cores = 1
 ) {
   params <- n1_expand_parameters(
     n_treatments,
@@ -18,7 +19,7 @@ n1_expand_parameters_and_run_experiment <- function(
     treatment_period, sampling_timestep, noise_timestep,
     n_replicates
   )
-  n1_run_experiment(n_treatments, params, treatment_mat_by_block, initial_random_seed, baseline_func)
+  n1_run_experiment(n_treatments, params, treatment_mat_by_block, initial_random_seed, baseline_func, cores)
 }
 
 n1_simulate_and_fit <- function(
@@ -142,7 +143,7 @@ combine_arrays  <- function(lla)  {
   })
 }
 
-n1_run_experiment <- function(n_treatments, parameters, treatment_mat_by_block = NULL, initial_random_seed = NA, baseline_func = NULL) {
+n1_run_experiment <- function(n_treatments, parameters, treatment_mat_by_block = NULL, initial_random_seed = NA, baseline_func = NULL, cores = 1) {
   if(is.na(initial_random_seed)) {
     initial_random_seed <- sample(2^31 - 1, 1)
   }
@@ -168,7 +169,15 @@ n1_run_experiment <- function(n_treatments, parameters, treatment_mat_by_block =
     })
   ), c(3, 1, 2))
   
-  fit_results <- lapply(
+  if(cores > 1) {
+    library(parallel)
+    lapply_func <- mclapply
+  }
+  else {
+    lapply_func <- lapply
+  }
+  
+  fit_results <- lapply_func(
     trial_ids,
     function(i) {
       fit_result <- n1_simulate_and_fit(
