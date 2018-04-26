@@ -397,7 +397,10 @@ n1_fit_model4 <- function(n_treatments, data) {
   }
   else {
     library(nlme)
-    format_lme_results(n_treatments, lme(fixed = (outcome_obs ~ factor(treatment)), random = (~ 1 | block), data = data))
+    format_lme_results(
+      n_treatments, 
+      lme(fixed = (outcome_obs ~ factor(treatment)), random = (~ 1 | block), data = data, method = 'ML')
+    )
   }
 }
 
@@ -408,6 +411,7 @@ format_lm_results <- function(n_treatments, fit_obj) {
       estimate = coeff_summ[1:n_treatments,1],
       pvalue = coeff_summ[1:n_treatments,4]
     ),
+    AIC = extractAIC(fit_obj)[2],
     fit_obj = fit_obj
   )
 }
@@ -419,6 +423,7 @@ format_lme_results <- function(n_treatments, fit_obj) {
       estimate = coeff_summ[1:n_treatments,1],
       pvalue = coeff_summ[1:n_treatments,5]
     ),
+    AIC = extractAIC(fit_obj)[2],
     fit_obj = fit_obj
   )
 }

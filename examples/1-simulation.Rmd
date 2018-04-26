@@ -1,5 +1,5 @@
 ---
-title: "Simulation Examples"
+title: "Simulating a single N-of-1 clinical trial"
 author: "Ed Baskerville"
 date: "4/25/2018"
 output:
@@ -9,8 +9,6 @@ output:
 ---
 
 This file demonstrates how to run individual N-of-1 clinical trial simulations.
-
-First, two things to load:
 
 ```{r}
 source('../n1-simulator.R')

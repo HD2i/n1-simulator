@@ -1,0 +1,103 @@
+---
+title: "Fitting N-of-1 models to data"
+author: "Ed Baskerville"
+date: "4/25/2018"
+output:
+  html_document:
+    fig_width: 6
+    fig_height: 2
+---
+
+This file demonstrates how to fit models to N-of-1 clinical trial simulations.
+Note that none of these are explicit time-series process models, which is a major limitation.
+
+```{r}
+source('../n1-simulator.R')
+library(ggplot2)
+```
+
+First, we'll generate the same time series as in `1-simulation.Rmd`:
+
+```{r}
+result <- n1_simulate(
+  n_treatments = 2, n_blocks = 2,
+  baseline_initial = 160, effect_size = c(-40, -30), tc_in = c(3, 2), tc_out = c(2, 3), tc_outcome = 1,
+  sd_baseline = 0.4, sd_outcome = 0.6, sd_obs = 4.0,
+  treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.01,
+  treatment_order = NULL, random_seed = 1, return_data_frame = TRUE
+)
+timeseries <- result$timeseries
+```
+
+```{r}
+ggplot(data = timeseries, aes(x = t)) + geom_line(aes(y = outcome)) + geom_point(aes(y = outcome_obs))
+```
+
+## Model 1: treatment only
+
+The simplest AHRQ model regresses the outcome
+
+```{r}
+lm(outcome_obs ~ factor(treatment), data = timeseries)
+```
+
+The intercept represents the baseline plus effect of treatment 1, and the coefficient for treatment 2 represents the effect size difference between the two treatments.
+
+This is encapsulated in the function `n1_model1`, which returns a named list containing three items:
+* `coefficients`: a data frame with effect coefficient estimates in the `estimate` column, and p-values in the `pvalue` column
+* `fit_obj`: the raw object returned by `lm`
+* `AIC` the Akaike Information Criterion value (AIC) for the model, for selecting among models
+
+```{r}
+n1_fit_model1(n_treatments = 2, timeseries)
+```
+
+## Model 2: treatment + block
+
+Model 2 adds a per-block regression term:
+
+```{r}
+lm(outcome_obs ~ factor(treatment) + factor(block), data = timeseries)
+```
+
+A shortcut is provided as `n1_model2`:
+
+```{r}
+n1_fit_model2(n_treatments = 2, timeseries)
+```
+
+Note the lower AIC value for this model, indicating that baseline drift is detected.
+
+## Model 3: treatment + block + treatment * time
+
+Model 3 adds an interaction with time:
+
+```{r}
+lm(outcome_obs ~ factor(treatment) + t * factor(treatment) + factor(block), data = timeseries)
+```
+
+and gives analogous results with `n1_fit_model3`:
+
+```{r}
+n1_fit_model3(n_treatments = 2, timeseries)
+```
+
+Again, note that the AIC value shows an improvement over the simpler models.
+
+
+## Model 4: treatment + block mixed effect
+
+Model 4 is a mixed-effect model, and requires the `nlme` package:
+
+```{r}
+library(nlme)
+lme(fixed = (outcome_obs ~ factor(treatment)), random = (~ 1 | block), data = timeseries, method = 'ML')
+```
+
+and it is accessible via `n1_fit_model4`:
+
+```{r}
+n1_fit_model4(n_treatments = 2, timeseries)
+```
+
+The AIC value is bizarrely high.
