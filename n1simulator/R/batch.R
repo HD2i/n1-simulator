@@ -6,6 +6,7 @@ n1_expand_parameters_and_run_experiment <- function(
   sd_baseline, sd_outcome, sd_obs,
   treatment_period, sampling_timestep, noise_timestep,
   n_replicates,
+  treatment_mat_by_block = NULL,
   initial_random_seed = NA, baseline_func = NULL
 ) {
   params <- n1_expand_parameters(
@@ -17,7 +18,7 @@ n1_expand_parameters_and_run_experiment <- function(
     treatment_period, sampling_timestep, noise_timestep,
     n_replicates
   )
-  n1_run_experiment(n_treatments, params, initial_random_seed, baseline_func)
+  n1_run_experiment(n_treatments, params, treatment_mat_by_block, initial_random_seed, baseline_func)
 }
 
 n1_simulate_and_fit <- function(
@@ -34,8 +35,9 @@ n1_simulate_and_fit <- function(
     n_blocks, n_treatments, baseline_initial, effect_size_vec, tc_in_vec, tc_out_vec, tc_outcome,
     sd_baseline, sd_outcome, sd_obs,
     treatment_period, sampling_timestep, noise_timestep,
-    return_data_frame = TRUE, treatment_mat_by_block,
-    random_seed, baseline_func
+    treatment_mat_by_block,
+    random_seed, baseline_func,
+    return_data_frame = TRUE
   )
 
   fits <- lapply(1:4, function(i) n1_fit(n_treatments, data, i))
@@ -140,7 +142,7 @@ combine_arrays  <- function(lla)  {
   })
 }
 
-n1_run_experiment <- function(n_treatments, parameters, initial_random_seed = NA, baseline_func = NULL) {
+n1_run_experiment <- function(n_treatments, parameters, treatment_mat_by_block = NULL, initial_random_seed = NA, baseline_func = NULL) {
   if(is.na(initial_random_seed)) {
     initial_random_seed <- sample(2^31 - 1, 1)
   }
@@ -154,8 +156,16 @@ n1_run_experiment <- function(n_treatments, parameters, initial_random_seed = NA
   tc_in_mat <- get_vec_columns(p, 'tc_in', n_treatments)
   tc_out_mat <- get_vec_columns(p, 'tc_out', n_treatments)
   
+  # TODO: support sweeping over treatment ordering
   treatment_order_arr <- aperm(simplify2array(
-    lapply(1:n_trials, function(i) randomize_treatments_by_block(p$n_blocks[i], n_treatments))
+    lapply(1:n_trials, function(i) {
+      if(is.null(treatment_mat_by_block)) {
+        randomize_treatments_by_block(p$n_blocks[i], n_treatments)
+      }
+      else {
+        treatment_mat_by_block
+      }
+    })
   ), c(3, 1, 2))
   
   fit_results <- lapply(

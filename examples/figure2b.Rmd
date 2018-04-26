@@ -1,5 +1,5 @@
 ---
-title: "Figure 2a"
+title: "Figure 2b"
 author: "Ed Baskerville"
 date: "4/25/2018"
 output: html_document
@@ -16,7 +16,7 @@ source('../n1simulator/R/batch.R')
 ```
 
 ```{r}
-filename <- 'f2a_results.Rds'
+filename <- 'f2b_results.Rds'
 if(file.exists(filename)) {
   results <- readRDS(filename)
 } else {
@@ -33,9 +33,10 @@ if(file.exists(filename)) {
     sd_outcome = 1.0,
     sd_obs = 4.0,
     treatment_period = 30.0,
-    sampling_timestep = 1.0,
+    sampling_timestep = c(1, 2, 5, 10, 15, 30),
     noise_timestep = 0.05,
-    n_replicates = 400,
+    n_replicates = 100,
+    treatment_mat_by_block = matrix(c(2, 1, 2, 1), nrow=2, byrow = TRUE),
     initial_random_seed = 1
   )
   saveRDS(results, filename)
@@ -49,7 +50,7 @@ if(file.exists(filename)) {
 n_trials <- nrow(results$trial_id)
 df <- data.frame(
   trial_id = results$trial_id,
-  treatment_order = sapply(1:n_trials, function(i) treatment_mat_by_block_to_string(results$treatment_order[i,,])),
+  sampling_timestep = factor(results$sampling_timestep),
   estimate = sapply(1:n_trials, function(i) results$estimates[i,1,2]),
   pvalue = sapply(1:n_trials, function(i) results$pvalues[i,1,2])
 )
@@ -57,5 +58,5 @@ df$significant = df$pvalue < 0.05
 ```
 
 ```{r}
-ggplot(aes(x = treatment_order, y = estimate, color = significant), data = df) + geom_jitter()
+ggplot(aes(x = sampling_timestep, y = estimate, color = significant), data = df) + geom_jitter()
 ```

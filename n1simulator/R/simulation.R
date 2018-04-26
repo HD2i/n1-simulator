@@ -198,12 +198,12 @@ n1_simulate <- function(
   sampling_timestep,
   noise_timestep,
 
-  return_data_frame = TRUE,
-
   treatment_mat_by_block = NULL,
   random_seed = NA,
 
-  baseline_func = NULL
+  baseline_func = NULL,
+  
+  return_data_frame = TRUE
 ) {
   if(!is.na(random_seed)) {
     set.seed(random_seed)
