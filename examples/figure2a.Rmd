@@ -1,0 +1,59 @@
+---
+title: "Figure 2a"
+author: "Ed Baskerville"
+date: "4/25/2018"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+source('../n1simulator/R/simulation.R')
+source('../n1simulator/R/fitting.R')
+source('../n1simulator/R/batch.R')
+```
+
+```{r}
+filename <- 'f2a_results.Rds'
+if(file.exists(filename)) {
+  f2a_results <- readRDS(filename)
+} else {
+  start_time <- Sys.time()
+  f2a_results <- n1_expand_parameters_and_run_experiment(
+    n_treatments = 2,
+    n_blocks = 2,
+    baseline_initial = 160,
+    effect_size = c(-40, -30),
+    tc_in = c(6.0, 2.0),
+    tc_out = c(3.0, 10.0),
+    tc_outcome = 2.0,
+    sd_baseline = 0.8,
+    sd_outcome = 1.0,
+    sd_obs = 4.0,
+    treatment_period = 30.0,
+    sampling_timestep = 1.0,
+    noise_timestep = 0.05,
+    n_replicates = 400,
+    initial_random_seed = 1
+  )
+  saveRDS(f2a_results, filename)
+  end_time <- Sys.time()
+  print(end_time - start_time)
+}
+```
+
+
+```{r}
+n_trials <- nrow(f2a_results$trial_id)
+f2a_df <- data.frame(
+  trial_id = f2a_results$trial_id,
+  estimate = sapply(1:n_trials, function(i) f2a_results$estimates[i,1,2]),
+  treatment_order = sapply(1:n_trials, function(i) treatment_mat_by_block_to_string(f2a_results$treatment_order[i,,]))
+)
+```
+
+```{r}
+ggplot(aes(x = treatment_order, y = estimate), data = f2a_df) + geom_jitter()
+```

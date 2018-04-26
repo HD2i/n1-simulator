@@ -1,3 +1,5 @@
+library(nlme)
+
 n1_fit <- function(n_treatments, data, model) {
   if(model == 1) {
     n1_fit_model1(n_treatments, data)
@@ -63,7 +65,7 @@ format_lm_results <- function(n_treatments, fit_obj) {
 }
 
 format_lme_results <- function(n_treatments, fit_obj) {
-  coeff_summ <- summary(fit_nmle_noeffect)$tTable
+  coeff_summ <- summary(fit_obj)$tTable
   list(
     coefficients = data.frame(
       estimate = coeff_summ[1:n_treatments,1],

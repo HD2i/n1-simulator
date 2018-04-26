@@ -284,3 +284,7 @@ n1_simulate <- function(
   }
 }
 
+treatment_mat_by_block_to_string <- function(treatment_mat_by_block, delimiter = "") {
+  paste(as.character(t(treatment_mat_by_block)), collapse = delimiter)
+}
+

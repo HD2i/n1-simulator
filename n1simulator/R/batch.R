@@ -15,7 +15,7 @@ n1_expand_parameters_and_run_experiment <- function(
     tc_in, tc_out, tc_outcome,
     sd_baseline, sd_outcome, sd_obs,
     treatment_period, sampling_timestep, noise_timestep,
-    n_replicates,
+    n_replicates
   )
   n1_run_experiment(n_treatments, params, initial_random_seed, baseline_func)
 }
@@ -93,6 +93,10 @@ n1_expand_parameters <- function(
   params
 }
 
+get_vec_columns <- function(df, prefix, n_cols) {
+  as.matrix(df[sapply(1:n_cols, function(i) sprintf('%s_%d', prefix, i))])
+}
+
 # Combines a list of list of arrays into a list of arrays,
 # each of which has an extra initial dimension equal to the length of the original outer list.
 #
@@ -149,7 +153,11 @@ n1_run_experiment <- function(n_treatments, parameters, initial_random_seed = NA
   effect_size_mat <- get_vec_columns(p, 'effect_size', n_treatments)
   tc_in_mat <- get_vec_columns(p, 'tc_in', n_treatments)
   tc_out_mat <- get_vec_columns(p, 'tc_out', n_treatments)
-
+  
+  treatment_order_arr <- aperm(simplify2array(
+    lapply(1:n_trials, function(i) randomize_treatments_by_block(p$n_blocks[i], n_treatments))
+  ), c(3, 1, 2))
+  
   fit_results <- lapply(
     trial_ids,
     function(i) {
@@ -159,7 +167,7 @@ n1_run_experiment <- function(n_treatments, parameters, initial_random_seed = NA
         tc_in_mat[i,], tc_out_mat[i,], p$tc_outcome[i],
         p$sd_baseline[i], p$sd_outcome[i], p$sd_obs[i],
         p$treatment_period[i], p$sampling_timestep[i], p$noise_timestep[i],
-        treatment_mat_by_block = NULL,
+        treatment_mat_by_block = treatment_order_arr[i,,],
         random_seed = random_seeds[i],
         baseline_func = baseline_func
       )
@@ -182,7 +190,8 @@ n1_run_experiment <- function(n_treatments, parameters, initial_random_seed = NA
       sampling_timestep = array(p$sampling_timestep),
       noise_timestep = array(p$noise_timestep),
       replicate_id = array(p$replicate_id),
-      random_seed = array(random_seeds)
+      random_seed = array(random_seeds),
+      treatment_order = treatment_order_arr
     ),
     combine_arrays(fit_results)
   )
