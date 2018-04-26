@@ -216,10 +216,11 @@ matrix_to_column_list <- function(mat, prefix) {
 }
 
 n1_simulate <- function(
-  n_blocks, n_treatments,
+  n_treatments,
+  n_blocks,
 
-  baseline_initial, effect_size_vec,
-  tc_in_vec, tc_out_vec, tc_outcome,
+  baseline_initial, effect_size,
+  tc_in, tc_out, tc_outcome,
 
   sd_baseline, sd_outcome, sd_obs,
 
@@ -234,9 +235,10 @@ n1_simulate <- function(
   
   return_data_frame = TRUE
 ) {
-  if(!is.na(random_seed)) {
-    set.seed(random_seed)
+  if(is.na(random_seed)) {
+    random_seed <- sample(2^31 - 1, 1)
   }
+  set.seed(random_seed)
 
   study_duration <- n_blocks * n_treatments * treatment_period
   t_change_vec <- seq(0, study_duration, treatment_period)
@@ -274,8 +276,8 @@ n1_simulate <- function(
   }
 
   result <- n1_simulate_functions(
-    t_change_vec, baseline_func, effect_size_vec, treatment_mat,
-    tc_in_vec, tc_out_vec, tc_outcome,
+    t_change_vec, baseline_func, effect_size, treatment_mat,
+    tc_in, tc_out, tc_outcome,
     sd_outcome, noise_timestep
   )
 
@@ -331,6 +333,7 @@ n1_simulate <- function(
   }
   
   list(
+    random_seed = random_seed,
     treatment_order = treatment_mat_by_block,
     timeseries = timeseries_obj
   )
@@ -343,8 +346,6 @@ treatment_mat_by_block_to_string <- function(treatment_mat_by_block, delimiter =
 
 
 ### FITTING ###
-
-library(nlme)
 
 n1_fit <- function(n_treatments, data, model) {
   if(model == 1) {
@@ -395,6 +396,7 @@ n1_fit_model4 <- function(n_treatments, data) {
     format_lm_results(n_treatments, lm(outcome_obs ~ factor(treatment), data = data))
   }
   else {
+    library(nlme)
     format_lme_results(n_treatments, lme(fixed = (outcome_obs ~ factor(treatment)), random = (~ 1 | block), data = data))
   }
 }
@@ -451,9 +453,9 @@ n1_expand_parameters_and_run_experiment <- function(
 }
 
 n1_simulate_and_fit <- function(
-  n_blocks, n_treatments,
-  baseline_initial, effect_size_vec,
-  tc_in_vec, tc_out_vec, tc_outcome,
+  n_treatments, n_blocks,
+  baseline_initial, effect_size,
+  tc_in, tc_out, tc_outcome,
   sd_baseline, sd_outcome, sd_obs,
   treatment_period, sampling_timestep, noise_timestep,
   treatment_order = NULL,
@@ -461,7 +463,7 @@ n1_simulate_and_fit <- function(
   baseline_func = NULL
 ) {
   result <- n1_simulate(
-    n_blocks, n_treatments, baseline_initial, effect_size_vec, tc_in_vec, tc_out_vec, tc_outcome,
+    n_treatments, n_blocks, baseline_initial, effect_size, tc_in, tc_out, tc_outcome,
     sd_baseline, sd_outcome, sd_obs,
     treatment_period, sampling_timestep, noise_timestep,
     treatment_order,
@@ -641,15 +643,6 @@ n1_run_experiment <- function(
   effect_size_mat <- get_vec_columns(p, 'effect_size', n_treatments)
   tc_in_mat <- get_vec_columns(p, 'tc_in', n_treatments)
   tc_out_mat <- get_vec_columns(p, 'tc_out', n_treatments)
-  
-  # treatment_order_list <- lapply(1:n_trials, function(i) {
-  #   if(is.null(treatment_mat_by_block)) {
-  #     randomize_treatments_by_block(p$n_blocks[i], n_treatments)
-  #   }
-  #   else {
-  #     treatment_mat_by_block
-  #   }
-  # })
   
   if(cores > 1) {
     library(parallel)

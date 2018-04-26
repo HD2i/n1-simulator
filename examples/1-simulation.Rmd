@@ -1,0 +1,108 @@
+---
+title: "Simulation Examples"
+author: "Ed Baskerville"
+date: "4/25/2018"
+output:
+  html_document:
+    fig_width: 6
+    fig_height: 2
+---
+
+This file demonstrates how to run individual N-of-1 clinical trial simulations.
+
+First, two things to load:
+
+```{r}
+source('../n1-simulator.R')
+library(ggplot2)
+```
+
+The function `n1_simulate` is used to generate a time series:
+
+```{r}
+result <- n1_simulate(
+  n_treatments = 2, n_blocks = 2,
+  baseline_initial = 160,
+  effect_size = c(-40, -30),
+  tc_in = c(3, 2),
+  tc_out = c(2, 3),
+  tc_outcome = 1,
+  sd_baseline = 0.4,
+  sd_outcome = 0.6,
+  sd_obs = 4.0,
+  treatment_period = 30.0,
+  sampling_timestep = 1.0,
+  noise_timestep = 0.01,
+  treatment_order = NULL,
+  random_seed = 1,
+  return_data_frame = TRUE
+)
+```
+
+whose underlying and observed outcome can be viewed like so:
+
+```{r}
+ggplot(data = result$timeseries, aes(x = t)) + geom_line(aes(y = outcome)) + geom_point(aes(y = outcome_obs))
+```
+
+## Arguments and Return Values
+
+`n1_simulate` takes model parameters, described in the next section, as well as:
+* `random_seed`, which will be generated randomly and returned if set to `NA`
+* `return_data_frame`, which determines whether the time series will be returned as a data frame (the default) or as a list of arrays, with multivariate components represented as multidimensional arrays rather than multiple columns.
+
+All model parameters are required except `treatment_order`, which will be generated randomly if set to `NULL`.
+
+`n1_simulate` returns a named list with three items:
+
+* `random_seed`: the random seed used, which can be used to exactly reproduce the simulation.
+* `treatment_order`: the treatment order used, as a matrix with `n_blocks` rows X `n_treatments` columns.
+* `timeseries`: the time series data, either a data frame or a list of arrays depending on `return_data_frame`.
+
+```{r}
+result$random_seed
+```
+
+
+```{r}
+result$treatment_order
+```
+
+## Model and Parameter Details
+
+The study consists of `n_blocks` blocks, within which each of `n_treatments` treatments is applied.
+The total study duration will be `n_blocks * n_treatments * treatment_period`, or 120.
+
+The baseline process, $B$ in the paper, is a discretized Wiener process starting at `baseline_initial`.
+The standard deviation of the amount of drift over 1 unit of time is equal to `sd_baseline`.
+The process is simulated at timesteps of `noise_timestep`.
+
+For this simulation, the baseline process looks like so:
+
+```{r}
+ggplot(data = result$timeseries, aes(x = t, y = baseline)) + geom_line()
+```
+
+The effect process is a sum of effects from each treatment, each of which is modeled as exponential decays toward a target value.
+The run-in time constants are in `tc_in`; the wash-out time constants are in `tc_out`.
+The sum of all effects is stored in `timeseries$effect`:
+
+```{r}
+ggplot(data = result$timeseries, aes(x = t, y = effect)) + geom_line()
+```
+
+The outcome process, $Z$ in the paper, is modeled as exponential decay toward `baseline + effect` with a time constant of `tc_outcome`, with decays and process noise occurring every `noise_timestep`.
+
+
+```{r}
+ggplot(data = result$timeseries, aes(x = t, y = outcome)) + geom_line()
+```
+
+## Treatment Order
+
+The treatment order can be provided as a parameter in one of three forms:
+
+* A vector of length `n_treatments` containing an order to be repeated for every block
+* A vector of length `n_blocks * n_treatments` containing the order across all blocks
+* A matrix with `n_blocks` rows and `n_treatments` columns containing the treatment order for each block in the corresponding row.
+
