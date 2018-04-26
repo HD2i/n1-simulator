@@ -49,7 +49,7 @@ n1_simulate <- function(
 
 #### Arguments
 
-*`n_treatments`*
+##### `n_treatments`
 
 <dl>
     <dt>Description</dt>
@@ -64,7 +64,7 @@ n1_simulate <- function(
     <dd>`n_treatments >= 2`</dd>
 </dl>
 
-*`n_blocks`*
+##### `n_blocks`
 
 <dl>
     <dt>Description</dt>
@@ -79,7 +79,7 @@ n1_simulate <- function(
     <dd>`n_blocks >= 1`</dd>
 </dl>
 
-*`baseline_initial`*
+##### `baseline_initial`
 
 <dl>
     <dt>Description</dt>
@@ -95,7 +95,7 @@ n1_simulate <- function(
     <dd>`is.finite(baseline_initial)`</dd>
 </dl>
 
-*`effect_size`*
+##### `effect_size`
 
 <dl>
     <dt>Description</dt>
@@ -113,7 +113,7 @@ n1_simulate <- function(
     <dd>`all(is.finite(effect_size))`</dd>
 </dl>
 
-*`tc_in`*
+##### `tc_in`
 
 <dl>
     <dt>Description</dt>
@@ -131,7 +131,7 @@ n1_simulate <- function(
     <dd>`all(is.finite(tc_in))`</dd>
 </dl>
 
-*`tc_out`*
+##### `tc_out`
 
 <dl>
     <dt>Description</dt>
@@ -149,7 +149,7 @@ n1_simulate <- function(
     <dd>`all(is.finite(tc_out))`</dd>
 </dl>
 
-*`sd_baseline`*
+##### `sd_baseline`
 
 <dl>
     <dt>Description</dt>
