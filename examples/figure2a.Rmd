@@ -5,38 +5,36 @@ date: "4/25/2018"
 output: html_document
 ---
 
-```{r}
-library(ggplot2)
-```
+This document roughly corresponds to Figure 2a in the paper.
 
 ```{r}
+library(ggplot2)
 source('../n1-simulator.R')
 ```
 
 ```{r}
 params <- n1_expand_parameters(
-    n_treatments = 2,
-    n_blocks = 2,
-    baseline_initial = 160,
-    effect_size = c(-40, -30),
-    tc_in = c(6.0, 2.0),
-    tc_out = c(3.0, 10.0),
-    tc_outcome = 2.0,
-    sd_baseline = 2.0,
-    sd_outcome = 1.0,
-    sd_obs = 4.0,
-    treatment_period = 30.0,
-    sampling_timestep = 1.0,
-    noise_timestep = 0.05,
-    treatment_order = list(
-      c(1, 2, 1, 2),
-      c(1, 2, 2, 1),
-      c(2, 1, 1, 2),
-      c(2, 1, 2, 1)
-    ),
-    n_replicates = 1
-  )
-params
+  n_treatments = 2,
+  n_blocks = 2,
+  baseline_initial = 160,
+  effect_size = c(-40, -30),
+  tc_in = c(6.0, 2.0),
+  tc_out = c(3.0, 10.0),
+  tc_outcome = 2.0,
+  sd_baseline = 2.0,
+  sd_outcome = 1.0,
+  sd_obs = 4.0,
+  treatment_period = 30.0,
+  sampling_timestep = 1.0,
+  noise_timestep = 0.05,
+  treatment_order = list(
+    c(1, 2, 1, 2),
+    c(1, 2, 2, 1),
+    c(2, 1, 1, 2),
+    c(2, 1, 2, 1)
+  ),
+  n_replicates = 100
+)
 ```
 
 ```{r}
@@ -45,29 +43,11 @@ if(file.exists(filename)) {
   results <- readRDS(filename)
 } else {
   start_time <- Sys.time()
-  results <- n1_expand_parameters_and_run_experiment(
-    n_treatments = 2,
-    n_blocks = 2,
-    baseline_initial = 160,
-    effect_size = c(-40, -30),
-    tc_in = c(6.0, 2.0),
-    tc_out = c(3.0, 10.0),
-    tc_outcome = 2.0,
-    sd_baseline = 2.0,
-    sd_outcome = 1.0,
-    sd_obs = 4.0,
-    treatment_period = 30.0,
-    sampling_timestep = 1.0,
-    noise_timestep = 0.05,
-    treatment_order = list(
-      c(1, 2, 1, 2),
-      c(1, 2, 2, 1),
-      c(2, 1, 1, 2),
-      c(2, 1, 2, 1)
-    ),
-    n_replicates = 100,
+  results <- n1_run_experiment(
+    n_treatments = 2, params,
     initial_random_seed = 1,
-    cores = 2
+    cores = 2,
+    return_data_frame = FALSE
   )
   saveRDS(results, filename)
   end_time <- Sys.time()
@@ -81,8 +61,8 @@ n_trials <- nrow(results$trial_id)
 df <- data.frame(
   trial_id = results$trial_id,
   treatment_order = sapply(1:n_trials, function(i) treatment_order_mat_to_str(results$treatment_order[i,,])),
-  estimate = sapply(1:n_trials, function(i) results$estimates[i,1,2]),
-  pvalue = sapply(1:n_trials, function(i) results$pvalues[i,1,2])
+  estimate = sapply(1:n_trials, function(i) results$estimate[i,1,2]),
+  pvalue = sapply(1:n_trials, function(i) results$pvalue[i,1,2])
 )
 df$significant = df$pvalue < 0.05
 ```

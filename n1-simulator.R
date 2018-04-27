@@ -195,6 +195,19 @@ treatment_order_mat_to_str <- function(treatment_order_mat) {
   )
 }
 
+treatment_order_str_to_mat <- function(n_blocks, treatment_order_str) {
+  print(treatment_order_str)
+  if(is.character(treatment_order_str)) {
+    treatment_order_vec_to_mat(
+      n_blocks,
+      treatment_order_str_to_vec(treatment_order)
+    )
+  }
+  else {
+    NULL
+  }
+}
+
 treatment_order_str_to_vec <- function(treatment_order_str) {
   if(is.character(treatment_order_str)) {
     as.numeric(unlist(strsplit(treatment_order_str, split = "")))
@@ -443,7 +456,8 @@ n1_expand_parameters_and_run_experiment <- function(
   treatment_order = NULL,
   n_replicates,
   initial_random_seed = NA, baseline_func = NULL,
-  cores = 1
+  cores = 1,
+  return_data_frame = TRUE
 ) {
   params <- n1_expand_parameters(
     n_treatments,
@@ -455,7 +469,7 @@ n1_expand_parameters_and_run_experiment <- function(
     treatment_order,
     n_replicates
   )
-  n1_run_experiment(n_treatments, params, initial_random_seed, baseline_func, cores)
+  n1_run_experiment(n_treatments, params, initial_random_seed, baseline_func, cores, return_data_frame)
 }
 
 n1_simulate_and_fit <- function(

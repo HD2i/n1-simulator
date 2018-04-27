@@ -5,11 +5,10 @@ date: "4/25/2018"
 output: html_document
 ---
 
-```{r}
-library(ggplot2)
-```
+This document roughly corresponds to Figure 2b in the paper.
 
 ```{r}
+library(ggplot2)
 source('../n1-simulator.R')
 ```
 
@@ -36,7 +35,8 @@ if(file.exists(filename)) {
     n_replicates = 100,
     treatment_order = c(2, 1, 2, 1),
     initial_random_seed = 1,
-    cores = 2
+    cores = 2,
+    return_data_frame = FALSE
   )
   saveRDS(results, filename)
   end_time <- Sys.time()
@@ -50,8 +50,8 @@ n_trials <- nrow(results$trial_id)
 df <- data.frame(
   trial_id = results$trial_id,
   sampling_timestep = factor(results$sampling_timestep),
-  estimate = sapply(1:n_trials, function(i) results$estimates[i,1,2]),
-  pvalue = sapply(1:n_trials, function(i) results$pvalues[i,1,2])
+  estimate = sapply(1:n_trials, function(i) results$estimate[i,1,2]),
+  pvalue = sapply(1:n_trials, function(i) results$pvalue[i,1,2])
 )
 df$significant = df$pvalue < 0.05
 ```
