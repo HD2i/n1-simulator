@@ -1,5 +1,130 @@
 ### SIMULATION ###
 
+n1_simulate <- function(
+  n_treatments,
+  n_blocks,
+  
+  baseline_initial, effect_size,
+  tc_in, tc_out, tc_outcome,
+  
+  sd_baseline, sd_outcome, sd_obs,
+  
+  treatment_period,
+  sampling_timestep,
+  noise_timestep,
+  
+  treatment_order = NULL,
+  random_seed = NA,
+  
+  baseline_func = NULL,
+  
+  return_data_frame = TRUE
+) {
+  if(is.na(random_seed)) {
+    random_seed <- sample(2^31 - 1, 1)
+  }
+  set.seed(random_seed)
+  
+  study_duration <- n_blocks * n_treatments * treatment_period
+  t_change_vec <- seq(0, study_duration, treatment_period)
+  n_periods <- length(t_change_vec) - 1
+  
+  # Construct function to return block number as a function of time
+  block_vec <- c(unlist(lapply(1:n_blocks, function(i) rep(i, n_treatments))), n_blocks)
+  block_func <- approxfun(t_change_vec, block_vec, method = 'constant')
+  
+  # If NULL, randomize treatment order
+  if(is.null(treatment_order)) {
+    treatment_mat_by_block <- randomize_treatments_by_block(n_blocks, n_treatments)
+  }
+  # If a matrix, use it directly
+  else if(is.matrix(treatment_order)){
+    stopifnot(nrow(treatment_order) == n_blocks && ncol(treatment_order) == n_treatments)
+    treatment_mat_by_block <- treatment_order
+  }
+  else {
+    stopifnot(is.numeric(treatment_order))
+    # If a one-block vector, repeat it
+    if(length(treatment_order) == n_treatments) {
+      treatment_mat_by_block <- matrix(rep(treatment_order, n_blocks), nrow = n_blocks, byrow = TRUE)
+    }
+    # If an all-blocks vector, convert it to a matrix
+    else {
+      stopifnot(length(treatment_order) == n_treatments * n_blocks)
+      treatment_mat_by_block <- matrix(treatment_order, nrow = n_blocks, byrow = TRUE)
+    }
+  }
+  treatment_mat <- treatment_mat_by_block_to_binary(treatment_mat_by_block)
+  
+  if(is.null(baseline_func)) {
+    baseline_func <- make_brownian_baseline_function(baseline_initial, sd_baseline, 0, study_duration, noise_timestep)
+  }
+  
+  result <- n1_simulate_functions(
+    t_change_vec, baseline_func, effect_size, treatment_mat,
+    tc_in, tc_out, tc_outcome,
+    sd_outcome, noise_timestep
+  )
+  
+  t_obs_vec <- seq(0, study_duration, sampling_timestep)
+  
+  block_vec_t_obs <- block_func(t_obs_vec)
+  
+  baseline_vec_t_obs <- baseline_func(t_obs_vec)
+  
+  treatment_mat_t_obs_binary <- do.call(cbind, lapply(result$T_funcs, function(T_func) T_func(t_obs_vec)))
+  treatment_vec_t_obs <- treatment_mat_binary_to_vec(treatment_mat_t_obs_binary)
+  
+  effect_mat <- do.call(cbind, lapply(result$X_funcs, function(X_func) X_func(t_obs_vec)))
+  effect_vec <- apply(effect_mat, 1, sum)
+  
+  outcome_obs_vec <- n1_observe_outcome(result$Z_func, t_obs_vec, sd_obs)
+  
+  outcome_vec <- result$Z_func(t_obs_vec)
+  
+  timeseries_obj <- if(return_data_frame) {
+    # Construct data frame with a separate effect column for each treatment
+    do.call(data.frame, c(
+      list(
+        t = t_obs_vec,
+        block = block_vec_t_obs,
+        baseline = baseline_vec_t_obs,
+        treatment = treatment_vec_t_obs
+      ),
+      matrix_to_column_list(treatment_mat_t_obs_binary, "treatment"),
+      list(
+        effect = effect_vec
+      ),
+      matrix_to_column_list(effect_mat, "effect"),
+      list(
+        outcome = outcome_vec,
+        outcome_obs = outcome_obs_vec
+      )
+    ))
+  }
+  else {
+    # Construct a named list of time series, but with
+    # the effect columns as a matrix `effect_by_treatment` with length(t_obs_vec) rows and n_treatments columns
+    list(
+      t = t_obs_vec,
+      block = block_vec_t_obs,
+      baseline = baseline_vec_t_obs,
+      treatment = treatment_vec_t_obs,
+      treatment_by_treatment = treatment_mat_t_obs_binary,
+      effect = effect_vec,
+      effect_by_treatment = effect_mat,
+      outcome = outcome_vec,
+      outcome_obs = outcome_obs_vec
+    )
+  }
+  
+  list(
+    random_seed = random_seed,
+    treatment_order = treatment_mat_by_block,
+    timeseries = timeseries_obj
+  )
+}
+
 exponential_decay <- function(X_initial, X_target, tau, delta_t) {
   X_target + (X_initial - X_target) * exp(-delta_t / tau)
 }
@@ -228,131 +353,6 @@ matrix_to_column_list <- function(mat, prefix) {
   )
 }
 
-n1_simulate <- function(
-  n_treatments,
-  n_blocks,
-
-  baseline_initial, effect_size,
-  tc_in, tc_out, tc_outcome,
-
-  sd_baseline, sd_outcome, sd_obs,
-
-  treatment_period,
-  sampling_timestep,
-  noise_timestep,
-  
-  treatment_order = NULL,
-  random_seed = NA,
-
-  baseline_func = NULL,
-  
-  return_data_frame = TRUE
-) {
-  if(is.na(random_seed)) {
-    random_seed <- sample(2^31 - 1, 1)
-  }
-  set.seed(random_seed)
-
-  study_duration <- n_blocks * n_treatments * treatment_period
-  t_change_vec <- seq(0, study_duration, treatment_period)
-  n_periods <- length(t_change_vec) - 1
-
-  # Construct function to return block number as a function of time
-  block_vec <- c(unlist(lapply(1:n_blocks, function(i) rep(i, n_treatments))), n_blocks)
-  block_func <- approxfun(t_change_vec, block_vec, method = 'constant')
-  
-  # If NULL, randomize treatment order
-  if(is.null(treatment_order)) {
-    treatment_mat_by_block <- randomize_treatments_by_block(n_blocks, n_treatments)
-  }
-  # If a matrix, use it directly
-  else if(is.matrix(treatment_order)){
-    stopifnot(nrow(treatment_order) == n_blocks && ncol(treatment_order) == n_treatments)
-    treatment_mat_by_block <- treatment_order
-  }
-  else {
-    stopifnot(is.numeric(treatment_order))
-    # If a one-block vector, repeat it
-    if(length(treatment_order) == n_treatments) {
-      treatment_mat_by_block <- matrix(rep(treatment_order, n_blocks), nrow = n_blocks, byrow = TRUE)
-    }
-    # If an all-blocks vector, convert it to a matrix
-    else {
-      stopifnot(length(treatment_order) == n_treatments * n_blocks)
-      treatment_mat_by_block <- matrix(treatment_order, nrow = n_blocks, byrow = TRUE)
-    }
-  }
-  treatment_mat <- treatment_mat_by_block_to_binary(treatment_mat_by_block)
-
-  if(is.null(baseline_func)) {
-    baseline_func <- make_brownian_baseline_function(baseline_initial, sd_baseline, 0, study_duration, noise_timestep)
-  }
-
-  result <- n1_simulate_functions(
-    t_change_vec, baseline_func, effect_size, treatment_mat,
-    tc_in, tc_out, tc_outcome,
-    sd_outcome, noise_timestep
-  )
-
-  t_obs_vec <- seq(0, study_duration, sampling_timestep)
-
-  block_vec_t_obs <- block_func(t_obs_vec)
-
-  baseline_vec_t_obs <- baseline_func(t_obs_vec)
-
-  treatment_mat_t_obs_binary <- do.call(cbind, lapply(result$T_funcs, function(T_func) T_func(t_obs_vec)))
-  treatment_vec_t_obs <- treatment_mat_binary_to_vec(treatment_mat_t_obs_binary)
-
-  effect_mat <- do.call(cbind, lapply(result$X_funcs, function(X_func) X_func(t_obs_vec)))
-  effect_vec <- apply(effect_mat, 1, sum)
-
-  outcome_obs_vec <- n1_observe_outcome(result$Z_func, t_obs_vec, sd_obs)
-
-  outcome_vec <- result$Z_func(t_obs_vec)
-  
-  timeseries_obj <- if(return_data_frame) {
-    # Construct data frame with a separate effect column for each treatment
-    do.call(data.frame, c(
-      list(
-        t = t_obs_vec,
-        block = block_vec_t_obs,
-        baseline = baseline_vec_t_obs,
-        treatment = treatment_vec_t_obs
-      ),
-      matrix_to_column_list(treatment_mat_t_obs_binary, "treatment"),
-      list(
-        effect = effect_vec
-      ),
-      matrix_to_column_list(effect_mat, "effect"),
-      list(
-        outcome = outcome_vec,
-        outcome_obs = outcome_obs_vec
-      )
-    ))
-  }
-  else {
-    # Construct a named list of time series, but with
-    # the effect columns as a matrix `effect_by_treatment` with length(t_obs_vec) rows and n_treatments columns
-    list(
-      t = t_obs_vec,
-      block = block_vec_t_obs,
-      baseline = baseline_vec_t_obs,
-      treatment = treatment_vec_t_obs,
-      treatment_by_treatment = treatment_mat_t_obs_binary,
-      effect = effect_vec,
-      effect_by_treatment = effect_mat,
-      outcome = outcome_vec,
-      outcome_obs = outcome_obs_vec
-    )
-  }
-  
-  list(
-    random_seed = random_seed,
-    treatment_order = treatment_mat_by_block,
-    timeseries = timeseries_obj
-  )
-}
-
 treatment_mat_by_block_to_string <- function(treatment_mat_by_block, delimiter = "") {
   paste(as.character(t(treatment_mat_by_block)), collapse = delimiter)
 }
@@ -445,208 +445,6 @@ format_lme_results <- function(n_treatments, fit_obj) {
 
 
 ### BATCH MODE ###
-
-n1_expand_parameters_and_run_experiment <- function(
-  n_treatments,
-  n_blocks,
-  baseline_initial, effect_size,
-  tc_in, tc_out, tc_outcome,
-  sd_baseline, sd_outcome, sd_obs,
-  treatment_period, sampling_timestep, noise_timestep,
-  treatment_order = NULL,
-  n_replicates,
-  initial_random_seed = NA, baseline_func = NULL,
-  cores = 1,
-  return_data_frame = TRUE
-) {
-  params <- n1_expand_parameters(
-    n_treatments,
-    n_blocks,
-    baseline_initial, effect_size,
-    tc_in, tc_out, tc_outcome,
-    sd_baseline, sd_outcome, sd_obs,
-    treatment_period, sampling_timestep, noise_timestep,
-    treatment_order,
-    n_replicates
-  )
-  n1_run_experiment(n_treatments, params, initial_random_seed, baseline_func, cores, return_data_frame)
-}
-
-n1_simulate_and_fit <- function(
-  n_treatments, n_blocks,
-  baseline_initial, effect_size,
-  tc_in, tc_out, tc_outcome,
-  sd_baseline, sd_outcome, sd_obs,
-  treatment_period, sampling_timestep, noise_timestep,
-  treatment_order = NULL,
-  random_seed = NA,
-  baseline_func = NULL
-) {
-  result <- n1_simulate(
-    n_treatments, n_blocks, baseline_initial, effect_size, tc_in, tc_out, tc_outcome,
-    sd_baseline, sd_outcome, sd_obs,
-    treatment_period, sampling_timestep, noise_timestep,
-    treatment_order,
-    random_seed, baseline_func,
-    return_data_frame = TRUE
-  )
-  data <- result$timeseries
-  
-  fits <- lapply(1:4, function(i) n1_fit(n_treatments, data, i))
-  list(
-    treatment_order = result$treatment_order,
-    estimate = do.call(rbind, lapply(fits, function(fit) fit$coefficients[,'estimate'])),
-    pvalue = do.call(rbind, lapply(fits, function(fit) fit$coefficients[,'pvalue'])),
-    AIC = array(unlist(lapply(fits, function(fit) fit$AIC)))
-  )
-}
-
-paramlist_to_expandargs <- function(paramlist, prefix) {
-  setNames(
-    as.list(paramlist),
-    sapply(1:length(paramlist), function(i) sprintf("%s_%d", prefix, i))
-  )
-}
-
-expand_treatment_order <- function(treatment_order) {
-  if(is.null(treatment_order)) {
-    NA
-  }
-  else {
-    if(is.list(treatment_order)) {
-      unlist(lapply(treatment_order, function(toi) {
-        if(is.vector(treatment_order)) {
-          treatment_order_vec_to_str(toi)
-        }
-        else {
-          treatment_order_mat_to_str(toi)
-        }
-      }))
-    }
-    else {
-      if(is.vector(treatment_order)) {
-        treatment_order_vec_to_str(treatment_order)
-      }
-      else {
-        treatment_order_mat_to_str(treatment_order)
-      }
-    }
-  }
-}
-
-n1_expand_parameters <- function(
-  n_treatments,
-  n_blocks,
-  baseline_initial, effect_size,
-  tc_in, tc_out, tc_outcome,
-  sd_baseline, sd_outcome, sd_obs,
-  treatment_period, sampling_timestep, noise_timestep,
-  treatment_order = NULL,
-  n_replicates
-) {
-  stopifnot(length(n_treatments) == 1)
-  
-  stopifnot(length(effect_size) == n_treatments)
-  stopifnot(length(tc_in) == n_treatments)
-  stopifnot(length(tc_out) == n_treatments)
-  
-  # Produce all combinations of parameters
-  params <- rev(do.call(
-    expand.grid,
-    rev(c(
-      stringsAsFactors = FALSE,
-      list(
-        n_blocks = n_blocks,
-        baseline_initial = baseline_initial
-      ),
-      paramlist_to_expandargs(effect_size, 'effect_size'),
-      paramlist_to_expandargs(tc_in, 'tc_in'),
-      paramlist_to_expandargs(tc_out, 'tc_out'),
-      list(
-        tc_outcome = tc_outcome,
-        sd_baseline = sd_baseline,
-        sd_obs = sd_obs,
-        sd_outcome = sd_outcome,
-        treatment_period = treatment_period,
-        sampling_timestep = sampling_timestep,
-        noise_timestep = noise_timestep,
-        treatment_order = expand_treatment_order(treatment_order),
-        replicate_id = 1:n_replicates
-      )
-    ))
-  ))
-  params
-}
-
-get_vec_columns <- function(df, prefix, n_cols) {
-  as.matrix(df[sapply(1:n_cols, function(i) sprintf('%s_%d', prefix, i))])
-}
-
-# Combines a list of arrays into a matrix with an extra dimension equal to the length fo the outer list.
-listofarrays_to_array <- function(la) {
-  stopifnot(is.list(la))
-  
-  # Get the initial and final dimensinos
-  dim_initial <- dim(la[[1]])
-  if(is.null(dim_initial)) {
-    dim_combined <- length(la)
-  }
-  else {
-    dim_combined <- c(dim_initial, length(la))
-  }
-  
-  # Concatenate inner arrays using c()
-  bigv <- do.call(c, la)
-  
-  # Turn it into an array with the right final dimensions
-  biga <- array(bigv, dim = dim_combined)
-  
-  # Return the big array with the last dimension turned into the first
-  aperm(biga, if(ndims == 1) 1 else c(ndims, 1:(ndims - 1)))
-}
-
-# Combines a list of list of arrays into a list of arrays,
-# each of which has an extra initial dimension equal to the length of the original outer list.
-#
-# E.g.: list(list(n_blocks = 1, effect_size = array(c(2,3))), list(n_blocks = 2, effect_size = array(c(4, 5))))
-# becomes something like list(n_blocks = array(c(1, 2)), effect_size = matrix(c(2, 3, 4, 5), byrow=TRUE))
-#
-# Length-1 numeric vectors are interpreted as 0-dimensional arrays (scalars).
-# Longer numeric vectors are not allowed: they must be 1-dimensional arrays with explicit dimensions
-# (to prevent ambiguity for length-1 numeric vectors).
-combine_arrays  <- function(lla)  {
-  stopifnot(is.list(lla))
-  stopifnot(is.list(lla[[1]]))
-  
-  # Get the initial and final dimensinos
-  dims_initial <- lapply(lla[[1]], function(a) dim(a))
-  dims_combined <- lapply(dims_initial, function(dim_initial) {
-    if(is.null(dim_initial)) {
-      length(lla)
-    }
-    else {
-      c(dim_initial, length(lla))
-    }
-  })
-  
-  # Concatenate inner arrays using c()
-  l_bigv <- do.call(mapply, c(list(c), lla, list(SIMPLIFY = FALSE)))
-  
-  # Turn them into arrays with the right final dimensions
-  l_biga <- mapply(
-    function(bigv, dim_combined) {
-      array(bigv, dim = dim_combined)
-    },
-    l_bigv, dims_combined,
-    SIMPLIFY = FALSE
-  )
-  
-  # Return list of arrays with original names and last dimension turned into the first
-  lapply(l_biga, function(a) {
-    ndims <- length(dim(a))
-    aperm(a, if(ndims == 1) 1 else c(ndims, 1:(ndims - 1)))
-  })
-}
 
 n1_run_experiment <- function(
   n_treatments, parameters,
@@ -747,6 +545,208 @@ n1_run_experiment <- function(
   else {
     rl
   }
+}
+
+n1_expand_parameters <- function(
+  n_treatments,
+  n_blocks,
+  baseline_initial, effect_size,
+  tc_in, tc_out, tc_outcome,
+  sd_baseline, sd_outcome, sd_obs,
+  treatment_period, sampling_timestep, noise_timestep,
+  treatment_order = NULL,
+  n_replicates
+) {
+  stopifnot(length(n_treatments) == 1)
+  
+  stopifnot(length(effect_size) == n_treatments)
+  stopifnot(length(tc_in) == n_treatments)
+  stopifnot(length(tc_out) == n_treatments)
+  
+  # Produce all combinations of parameters
+  params <- rev(do.call(
+    expand.grid,
+    rev(c(
+      stringsAsFactors = FALSE,
+      list(
+        n_blocks = n_blocks,
+        baseline_initial = baseline_initial
+      ),
+      paramlist_to_expandargs(effect_size, 'effect_size'),
+      paramlist_to_expandargs(tc_in, 'tc_in'),
+      paramlist_to_expandargs(tc_out, 'tc_out'),
+      list(
+        tc_outcome = tc_outcome,
+        sd_baseline = sd_baseline,
+        sd_obs = sd_obs,
+        sd_outcome = sd_outcome,
+        treatment_period = treatment_period,
+        sampling_timestep = sampling_timestep,
+        noise_timestep = noise_timestep,
+        treatment_order = expand_treatment_order(treatment_order),
+        replicate_id = 1:n_replicates
+      )
+    ))
+  ))
+  params
+}
+
+n1_expand_parameters_and_run_experiment <- function(
+  n_treatments,
+  n_blocks,
+  baseline_initial, effect_size,
+  tc_in, tc_out, tc_outcome,
+  sd_baseline, sd_outcome, sd_obs,
+  treatment_period, sampling_timestep, noise_timestep,
+  treatment_order = NULL,
+  n_replicates,
+  initial_random_seed = NA, baseline_func = NULL,
+  cores = 1,
+  return_data_frame = TRUE
+) {
+  params <- n1_expand_parameters(
+    n_treatments,
+    n_blocks,
+    baseline_initial, effect_size,
+    tc_in, tc_out, tc_outcome,
+    sd_baseline, sd_outcome, sd_obs,
+    treatment_period, sampling_timestep, noise_timestep,
+    treatment_order,
+    n_replicates
+  )
+  n1_run_experiment(n_treatments, params, initial_random_seed, baseline_func, cores, return_data_frame)
+}
+
+n1_simulate_and_fit <- function(
+  n_treatments, n_blocks,
+  baseline_initial, effect_size,
+  tc_in, tc_out, tc_outcome,
+  sd_baseline, sd_outcome, sd_obs,
+  treatment_period, sampling_timestep, noise_timestep,
+  treatment_order = NULL,
+  random_seed = NA,
+  baseline_func = NULL
+) {
+  result <- n1_simulate(
+    n_treatments, n_blocks, baseline_initial, effect_size, tc_in, tc_out, tc_outcome,
+    sd_baseline, sd_outcome, sd_obs,
+    treatment_period, sampling_timestep, noise_timestep,
+    treatment_order,
+    random_seed, baseline_func,
+    return_data_frame = TRUE
+  )
+  data <- result$timeseries
+  
+  fits <- lapply(1:4, function(i) n1_fit(n_treatments, data, i))
+  list(
+    treatment_order = result$treatment_order,
+    estimate = do.call(rbind, lapply(fits, function(fit) fit$coefficients[,'estimate'])),
+    pvalue = do.call(rbind, lapply(fits, function(fit) fit$coefficients[,'pvalue'])),
+    AIC = array(unlist(lapply(fits, function(fit) fit$AIC)))
+  )
+}
+
+paramlist_to_expandargs <- function(paramlist, prefix) {
+  setNames(
+    as.list(paramlist),
+    sapply(1:length(paramlist), function(i) sprintf("%s_%d", prefix, i))
+  )
+}
+
+expand_treatment_order <- function(treatment_order) {
+  if(is.null(treatment_order)) {
+    NA
+  }
+  else {
+    if(is.list(treatment_order)) {
+      unlist(lapply(treatment_order, function(toi) {
+        if(is.vector(treatment_order)) {
+          treatment_order_vec_to_str(toi)
+        }
+        else {
+          treatment_order_mat_to_str(toi)
+        }
+      }))
+    }
+    else {
+      if(is.vector(treatment_order)) {
+        treatment_order_vec_to_str(treatment_order)
+      }
+      else {
+        treatment_order_mat_to_str(treatment_order)
+      }
+    }
+  }
+}
+
+get_vec_columns <- function(df, prefix, n_cols) {
+  as.matrix(df[sapply(1:n_cols, function(i) sprintf('%s_%d', prefix, i))])
+}
+
+# Combines a list of arrays into a matrix with an extra dimension equal to the length fo the outer list.
+listofarrays_to_array <- function(la) {
+  stopifnot(is.list(la))
+  
+  # Get the initial and final dimensinos
+  dim_initial <- dim(la[[1]])
+  if(is.null(dim_initial)) {
+    dim_combined <- length(la)
+  }
+  else {
+    dim_combined <- c(dim_initial, length(la))
+  }
+  
+  # Concatenate inner arrays using c()
+  bigv <- do.call(c, la)
+  
+  # Turn it into an array with the right final dimensions
+  biga <- array(bigv, dim = dim_combined)
+  
+  # Return the big array with the last dimension turned into the first
+  aperm(biga, if(ndims == 1) 1 else c(ndims, 1:(ndims - 1)))
+}
+
+# Combines a list of list of arrays into a list of arrays,
+# each of which has an extra initial dimension equal to the length of the original outer list.
+#
+# E.g.: list(list(n_blocks = 1, effect_size = array(c(2,3))), list(n_blocks = 2, effect_size = array(c(4, 5))))
+# becomes something like list(n_blocks = array(c(1, 2)), effect_size = matrix(c(2, 3, 4, 5), byrow=TRUE))
+#
+# Length-1 numeric vectors are interpreted as 0-dimensional arrays (scalars).
+# Longer numeric vectors are not allowed: they must be 1-dimensional arrays with explicit dimensions
+# (to prevent ambiguity for length-1 numeric vectors).
+combine_arrays  <- function(lla)  {
+  stopifnot(is.list(lla))
+  stopifnot(is.list(lla[[1]]))
+  
+  # Get the initial and final dimensinos
+  dims_initial <- lapply(lla[[1]], function(a) dim(a))
+  dims_combined <- lapply(dims_initial, function(dim_initial) {
+    if(is.null(dim_initial)) {
+      length(lla)
+    }
+    else {
+      c(dim_initial, length(lla))
+    }
+  })
+  
+  # Concatenate inner arrays using c()
+  l_bigv <- do.call(mapply, c(list(c), lla, list(SIMPLIFY = FALSE)))
+  
+  # Turn them into arrays with the right final dimensions
+  l_biga <- mapply(
+    function(bigv, dim_combined) {
+      array(bigv, dim = dim_combined)
+    },
+    l_bigv, dims_combined,
+    SIMPLIFY = FALSE
+  )
+  
+  # Return list of arrays with original names and last dimension turned into the first
+  lapply(l_biga, function(a) {
+    ndims <- length(dim(a))
+    aperm(a, if(ndims == 1) 1 else c(ndims, 1:(ndims - 1)))
+  })
 }
 
 array3d_to_column_list <- function(a, prefix) {
