@@ -33,10 +33,6 @@ params <- n1_expand_parameters(
 ```
 
 ```{r}
-params
-```
-
-```{r}
 filename <- 'f4a_results.Rds'
 if(file.exists(filename)) {
   results <- readRDS(filename)
