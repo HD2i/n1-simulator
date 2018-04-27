@@ -296,6 +296,7 @@ n1_simulate <- function(
   outcome_obs_vec <- n1_observe_outcome(result$Z_func, t_obs_vec, sd_obs)
 
   outcome_vec <- result$Z_func(t_obs_vec)
+  
   timeseries_obj <- if(return_data_frame) {
     # Construct data frame with a separate effect column for each treatment
     do.call(data.frame, c(
@@ -480,8 +481,9 @@ n1_simulate_and_fit <- function(
   fits <- lapply(1:4, function(i) n1_fit(n_treatments, data, i))
   list(
     treatment_order = result$treatment_order,
-    estimates = do.call(rbind, lapply(fits, function(fit) fit$coefficients[,'estimate'])),
-    pvalues = do.call(rbind, lapply(fits, function(fit) fit$coefficients[,'pvalue']))
+    estimate = do.call(rbind, lapply(fits, function(fit) fit$coefficients[,'estimate'])),
+    pvalue = do.call(rbind, lapply(fits, function(fit) fit$coefficients[,'pvalue'])),
+    AIC = array(unlist(lapply(fits, function(fit) fit$AIC)))
   )
 }
 
@@ -634,7 +636,8 @@ combine_arrays  <- function(lla)  {
 
 n1_run_experiment <- function(
   n_treatments, parameters,
-  initial_random_seed = NA, baseline_func = NULL, cores = 1
+  initial_random_seed = NA, baseline_func = NULL, cores = 1,
+  return_data_frame = TRUE
 ) {
   if(is.na(initial_random_seed)) {
     initial_random_seed <- sample(2^31 - 1, 1)
@@ -661,7 +664,7 @@ n1_run_experiment <- function(
     trial_ids,
     function(i) {
       fit_result <- n1_simulate_and_fit(
-        p$n_blocks[i], n_treatments,
+        n_treatments, p$n_blocks[i],
         p$baseline_initial[i], effect_size_mat[i,],
         tc_in_mat[i,], tc_out_mat[i,], p$tc_outcome[i],
         p$sd_baseline[i], p$sd_outcome[i], p$sd_obs[i],
@@ -676,7 +679,7 @@ n1_run_experiment <- function(
   #estimates <- listofarrays_to_array(lapply(fit_results, function(fr) fr$estimates))
   #pvalues <- listofarrays_to_array(lapply(fit_results, function(fr) fr$pvalues))
   
-  c(
+  rl <- c(
     list(
       trial_id = array(trial_ids),
       n_blocks = array(p$n_blocks),
@@ -691,12 +694,51 @@ n1_run_experiment <- function(
       treatment_period = array(p$treatment_period),
       sampling_timestep = array(p$sampling_timestep),
       noise_timestep = array(p$noise_timestep),
-      #treatment_order = treatment_order,
-      #estimate = estimates,
-      #pvalue = pvalues,
       replicate_id = array(p$replicate_id),
       random_seed = array(random_seeds)
     ),
     combine_arrays(fit_results)
+  )
+  
+  if(return_data_frame) {
+    # Construct data frame with a separate effect column for each treatment
+    do.call(data.frame, c(
+      list(
+        trial_id = rl$trial_id,
+        n_blocks = rl$n_blocks,
+        baseline_initial = rl$baseline_initial
+      ),
+      matrix_to_column_list(rl$effect_size, "effect_size"),
+      matrix_to_column_list(rl$tc_in, "tc_in"),
+      matrix_to_column_list(rl$tc_in, "tc_out"),
+      list(
+        tc_outcome = rl$tc_outcome,
+        sd_baseline = rl$sd_baseline,
+        sd_outcome = rl$sd_outcome,
+        sd_obs = rl$sd_obs,
+        treatment_period = rl$treatment_period,
+        sampling_timestep = rl$sampling_timestep,
+        noise_timestep = rl$noise_timestep,
+        replicate_id = rl$replicate_id,
+        random_seed = rl$random_seed,
+        treatment_order = sapply(1:n_trials, function(i) {
+          treatment_order_mat_to_str(rl$treatment_order[i,,])
+        })
+      ),
+      array3d_to_column_list(rl$estimate, "estimate"),
+      array3d_to_column_list(rl$pvalue, "pvalue"),
+      matrix_to_column_list(rl$AIC, "AIC")
+    ))
+  }
+  else {
+    rl
+  }
+}
+
+array3d_to_column_list <- function(a, prefix) {
+  indices <- expand.grid(1:dim(a)[2], 1:dim(a)[3])
+  setNames(
+    lapply(1:nrow(indices), function(i) a[,indices[i,1],indices[i,2]]),
+    sapply(1:nrow(indices), function(i) sprintf("%s_%d_%d", prefix, indices[i,1], indices[i,2]))
   )
 }

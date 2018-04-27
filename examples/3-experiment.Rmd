@@ -1,0 +1,74 @@
+---
+title: "Simulating large N-of-1 experiments"
+author: "Ed Baskerville"
+date: "4/25/2018"
+output:
+  html_document:
+    fig_width: 6
+    fig_height: 2
+---
+
+This file demonstrates how to simulate and fit models to many N-of-1 clinical trials at once,
+sweeping over parameters and running multiple replicates per parameter set.
+
+```{r}
+source('../n1-simulator.R')
+library(ggplot2)
+```
+
+## Setting up parameter values
+
+To run a large experiment, first we use `n1_expand_parameters` to create a data frame containing parameter values.
+
+For example, if you want to run 100 simulations for all combinations of 1 to 6 blocks and two different values for `effect_size[2]`, do this:
+
+```{r}
+parameters <- n1_expand_parameters(
+  n_treatments = 2,
+  n_blocks = 1:6,
+  baseline_initial = 160,
+  effect_size = list(
+    -40, c(-30, -20)
+  ),
+  tc_in = c(3, 2), tc_out = c(2, 3), tc_outcome = 1,
+  sd_baseline = 1.0, sd_outcome = 0.6, sd_obs = 2.0,
+  treatment_period = 30.0, sampling_timestep = 1.0, noise_timestep = 0.05,
+  n_replicates = 20
+)
+parameters
+```
+`n_treatments` and `n_replicates` must be held constant. All other parameters can be varied.
+
+Vector-valued parameters must be replaced by lists in order to provide multiple values.
+
+
+## Running the experiment
+
+To simulate these parameter combinations and fit all 4 built-in models to them (see `2-fitting.Rmd`), do this:
+
+```{r}
+results <- n1_run_experiment(
+  n_treatments = 2, parameters,
+  initial_random_seed = 1, cores = 1, return_data_frame = TRUE
+)
+results
+```
+
+With `return_data_frame = TRUE`, results are provided in a data frame, where each row contains the results for a single clinical trial simulation.
+Vector- and matrix-valued items are split into multiple columns, e.g., `effect_size_1, effect_size_2`.
+
+With `return_data_frame = FALSE`, results are provided as a list of arrays with initial dimension equal to the number of runs, and subsequent dimensions dependent on the value (e.g., an `n_trials` X 4 X `n_treatments` array for model estimates and p-values).
+
+Model results are given in, e.g., `estimate_1_2`, `pvalue_1_2` for model 1, coefficient 2, and `AIC_1` for model 1.
+
+Note that the coefficient 2 corresponds to the effect size difference between treatment 1 and treatment 2.
+
+Now, we can easily plot the experiment by the two parameters we varied and color by 0.05 significance level:
+
+```{r}
+ggplot(data = results, aes(
+  x = n_blocks, y = estimate_1_2,
+  color = (pvalue_1_2 < 0.05)
+))+ geom_jitter() + facet_grid(. ~ effect_size_2)
+```
+
