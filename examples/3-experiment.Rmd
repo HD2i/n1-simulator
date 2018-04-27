@@ -69,6 +69,6 @@ Now, we can easily plot the experiment by the two parameters we varied and color
 ggplot(data = results, aes(
   x = n_blocks, y = estimate_1_2,
   color = (pvalue_1_2 < 0.05)
-))+ geom_jitter() + facet_grid(. ~ effect_size_2)
+))+ geom_jitter() + facet_grid(. ~ (effect_size_2 - effect_size_1))
 ```
 
