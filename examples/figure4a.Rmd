@@ -12,6 +12,8 @@ source('../n1-simulator.R')
 ```
 
 ```{r}
+n_replicates <- 500
+
 params <- n1_expand_parameters(
   n_treatments = 2,
   n_blocks = 1,
@@ -26,7 +28,7 @@ params <- n1_expand_parameters(
   treatment_period = seq(5, 100, 5),
   sampling_timestep = 1.0,
   noise_timestep = 0.5,
-  n_replicates = 50
+  n_replicates = n_replicates
 )
 ```
 
@@ -74,7 +76,7 @@ We'll calculate power by summarizing results with the same parameter values:
 df_summ <- df %>%
   group_by(effect_size, treatment_period) %>%
   summarize(n_significant = sum(significant))
-df_summ$power <- df_summ$n_significant / 100
+df_summ$power <- df_summ$n_significant / n_replicates
 ```
 
 ```{r}
