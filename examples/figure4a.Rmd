@@ -1,0 +1,82 @@
+---
+title: "Figure 4a"
+author: "Ed Baskerville"
+date: "4/25/2018"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+source('../n1-simulator.R')
+```
+
+```{r}
+params <- n1_expand_parameters(
+  n_treatments = 2,
+  n_blocks = 1,
+  baseline_initial = 0,
+  effect_size = list(0, seq(0, 1, 0.1)),
+  tc_in = c(0.01, 0.01),
+  tc_out = c(0.01, 0.01),
+  tc_outcome = 0.1,
+  sd_baseline = 0.0,
+  sd_outcome = 0.0,
+  sd_obs = 1.0,
+  treatment_period = seq(5, 100, 5),
+  sampling_timestep = 1.0,
+  noise_timestep = 0.5,
+  n_replicates = 50
+)
+```
+
+```{r}
+params
+```
+
+```{r}
+filename <- 'f4a_results.Rds'
+if(file.exists(filename)) {
+  results <- readRDS(filename)
+} else {
+  start_time <- Sys.time()
+  results <- n1_run_experiment(
+    n_treatments = 2,
+    params,
+    initial_random_seed = 1,
+    cores = 2,
+    return_data_frame = FALSE
+  )
+  saveRDS(results, filename)
+  end_time <- Sys.time()
+  print(end_time - start_time)
+}
+```
+
+
+```{r}
+n_trials <- nrow(results$trial_id)
+df <- data.frame(
+  trial_id = results$trial_id,
+  effect_size = results$effect_size[,2],
+  treatment_period = results$treatment_period,
+  estimate = sapply(1:n_trials, function(i) results$estimate[i,1,2]),
+  pvalue = sapply(1:n_trials, function(i) results$pvalue[i,1,2])
+)
+df$significant = df$pvalue < 0.05
+```
+
+
+
+We'll calculate power by summarizing results with the same parameter values:
+
+```{r}
+df_summ <- df %>%
+  group_by(effect_size, treatment_period) %>%
+  summarize(n_significant = sum(significant))
+df_summ$power <- df_summ$n_significant / 100
+```
+
+```{r}
+ggplot(aes(x = treatment_period, y = power, color = factor(effect_size), group = factor(effect_size)), data = df_summ) + geom_point() + geom_line()
+```
