@@ -233,8 +233,8 @@ server <- function(input, output, session) {
     
     timeseries <- n1sim_result()$timeseries
     plot <- ggplot(data = timeseries, aes(x = t)) 
-    plot <- plot + geom_line(aes(y = outcome, colour="underlying"), size=0.75)
-    plot <- plot + geom_point(aes(y = outcome_obs, colour="observed", shape=factor(treatment)))
+    plot <- plot + geom_line(aes(y = outcome, alpha="underlying"), colour="#555555", size=0.75)
+    plot <- plot + geom_point(aes(y = outcome_obs, alpha="observed", colour=factor(treatment), shape=factor(treatment), fill=factor(treatment)))
     
     isolate({
       grid_x_major = seq(0, input$treatment_period*input$n_blocks*input$n_treatments, input$treatment_period)
@@ -244,10 +244,15 @@ server <- function(input, output, session) {
     plot <- plot + ggtitle("Underlying and observed outcome") + theme(plot.title = element_text(hjust=0.5, face="bold"))
     plot <- plot + xlab("Day in study") + ylab("Outcome")
     plot <- plot + theme(text = element_text(size=14))
-    plot <- plot + scale_colour_manual(name="Outcome",
-                                       values=c("observed"="#0072b2","underlying"="#d55e00"),
-                                       guide=guide_legend(override.aes = list(linetype=c("blank","solid"),shape=c(16,NA))))
-    plot <- plot + scale_shape(name="Treatment")
+    plot <- plot + scale_colour_manual(name="Treatment",
+                                       values=c("1"="#009E73","2"="#D55E00","3"="#0072B2","4"="#CC79A7","5"="#E69F00"))
+    plot <- plot + scale_fill_manual(name="Treatment",
+                                     values=c("1"="#009E73","2"="#D55E00","3"="#0072B2","4"="#CC79A7","5"="#E69F00"))
+    plot <- plot + scale_shape_manual(name="Treatment",
+                                      values=c("1"=21,"2"=22,"3"=23,"4"=24,"5"=25))
+    plot <- plot + scale_alpha_manual(name="Outcome",
+                                      values=c("observed"=1,"underlying"=1),
+                                      guide=guide_legend(override.aes = list(linetype=c("blank","solid"),shape=c(16,NA))))
     return(plot)
   })
   
