@@ -19,6 +19,12 @@ img {
     overflow-y: auto;
 }
 
+#orgRow {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
 .irs-bar {
     border-top: 1px solid #56b4e9;
     border-bottom: 1px solid #56b4e9;

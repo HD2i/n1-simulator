@@ -110,6 +110,18 @@ ui <- function(request) {
         br(),
         bookmarkButton()
       )
+    ),
+    hr(),
+    fixedRow(id="orgRow",
+      column(4,
+        a(img(src='hd2ilogo.svg', height=40), href="http://hd2i.org")
+      ),
+      column(4,
+        a(img(src='inghlogo.svg', height=60), href="http://www.nextgenhealthcare.org")
+      ),
+      column(4,
+        a("Source available on Github", href="https://github.com/HD2i/n1-simulator")
+      )
     )
   )
 }
