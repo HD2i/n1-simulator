@@ -15,7 +15,7 @@ library(ggplot2)
 source('../n1-simulator.R')
 source('utils.R')
 
-# Define UI for application that draws a histogram
+# Define UI for application
 ui <- function(request) {
   fixedPage(
     includeCSS("custom.css"),
@@ -30,7 +30,7 @@ ui <- function(request) {
           tabPanel("Plot", 
             plotOutput('outcomePlot')
           ),
-          tabPanel("Fitting", 
+          tabPanel("Fit", 
             h4("Model Fit 1: Treatment Only"),
             verbatimTextOutput("model1fit"),
             hr(),
@@ -114,9 +114,9 @@ ui <- function(request) {
   )
 }
 
-# Define server logic required to draw a histogram
+# Define server logic
 server <- function(input, output, session) {
-  # Notification
+  ## Notification
   notification_id <- NULL
   
   observe({
@@ -212,7 +212,6 @@ server <- function(input, output, session) {
   
   ## Render elements
   output$treatmentScheduleOptions <- renderUI({
-    #options <- treatment_schedule_options_to_strvec(generate_treatment_schedule_options(input$n_treatments, input$n_blocks))
     selectInput("treatment_schedule", "Treatment Schedule:", treatment_options())
   })
   
@@ -224,8 +223,6 @@ server <- function(input, output, session) {
     plot <- ggplot(data = timeseries, aes(x = t)) 
     plot <- plot + geom_line(aes(y = outcome, colour="underlying"), size=0.75)
     plot <- plot + geom_point(aes(y = outcome_obs, colour="observed", shape=factor(treatment)))
-    #plot <- plot + geom_line(aes(y = baseline, colour="baseline"), size=0.75)
-    #plot <- plot + geom_line(aes(y = effect, colour="effect"), size=0.75)
     
     isolate({
       grid_x_major = seq(0, input$treatment_period*input$n_blocks*input$n_treatments, input$treatment_period)
@@ -238,10 +235,6 @@ server <- function(input, output, session) {
     plot <- plot + scale_colour_manual(name="Outcome",
                                        values=c("observed"="#0072b2","underlying"="#d55e00"),
                                        guide=guide_legend(override.aes = list(linetype=c("blank","solid"),shape=c(16,NA))))
-                                       #values=c("observed"="#0072b2","underlying"="#d55e00","baseline"="#CC79A7"),
-                                       #guide=guide_legend(override.aes = list(linetype=c("blank","solid","blank"),shape=c(16,NA,16))))
-                                       #values=c("observed"="#0072b2","underlying"="#d55e00","effect"="#F0E442"),
-                                       #guide=guide_legend(override.aes = list(linetype=c("blank","solid","blank"),shape=c(16,NA,16))))
     plot <- plot + scale_shape(name="Treatment")
     return(plot)
   })
