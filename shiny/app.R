@@ -126,8 +126,7 @@ ui <- function(request) {
         uiOutput("treatmentScheduleOptions"),
         numericInput("treatment_period", HTML(paste0("Treatment period ", tags$span("(days)"), ":")), value=30),
         numericInput("sampling_timestep", HTML(paste0("Sampling timestep ", tags$span("(days)"), ":")), min=0.1, value=1, step=0.1),
-        bsTooltip("treatment_schedule", "Ordering of treatment periods",
-                  placement="right", trigger="hover", options=list(container="body")),
+        # Tooltip for treatment_period is defined in renderUI using tipify, due to timing/rendering issue
         bsTooltip("treatment_period", "Number of days for each treatment period",
                   placement="right", trigger="hover", options=list(container="body")),
         bsTooltip("sampling_timestep", "Number of days between samples",
@@ -278,7 +277,8 @@ server <- function(input, output, session) {
   
   ## Render elements
   output$treatmentScheduleOptions <- renderUI({
-    selectInput("treatment_schedule", "Treatment schedule:", treatment_options())
+    tipify(selectInput("treatment_schedule", "Treatment schedule:", treatment_options()),
+           title="Ordering of treatment periods", placement="right", trigger="hover", options=list(container="body"))
   })
   
   output$outcomePlot <- renderPlot({
