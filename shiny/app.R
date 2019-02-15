@@ -58,11 +58,11 @@ ui <- function(request) {
         numericInput("tc_in_1", "Run-in:", min=1, value=3),
         numericInput("tc_out_1", "Wash-out:", min=1, value=2),
         bsTooltip("effect_1", "The effect size is the asymptotic magnitude change from baseline that a person would experience in the long run, if they continued this treatment",
-                  placement = "right", trigger = "hover", options=list(container="body")),
+                  placement="right", trigger="hover", options=list(container="body")),
         bsTooltip("tc_out_1", "The \"wash-out\" (or \"carryover\") time constant is a measure of how long it takes for a treatment to stop working once it is discontinued",
-                  placement = "right", trigger = "hover", options=list(container="body")),
+                  placement="right", trigger="hover", options=list(container="body")),
         bsTooltip("tc_in_1", "The \"run-in\" (or \"wash-in\") time constant is a measure of how long it takes for a treatment to ramp up to its full effect",
-                  placement = "right", trigger = "hover", options=list(container="body")),
+                  placement="right", trigger="hover", options=list(container="body")),
         conditionalPanel(
          condition = "input.n_treatments >= 2",
          hr(),
@@ -71,11 +71,11 @@ ui <- function(request) {
          numericInput("tc_in_2", "Run-in:", min=1, value=2),
          numericInput("tc_out_2", "Wash-out:", min=1, value=3),
          bsTooltip("effect_2", "The effect size is the asymptotic magnitude change from baseline that a person would experience in the long run, if they continued this treatment",
-                   placement = "right", trigger = "hover", options=list(container="body")),
+                   placement="right", trigger="hover", options=list(container="body")),
          bsTooltip("tc_out_2", "The \"wash-out\" (or \"carryover\") time constant is a measure of how long it takes for a treatment to stop working once it is discontinued",
-                   placement = "right", trigger = "hover", options=list(container="body")),
+                   placement="right", trigger="hover", options=list(container="body")),
          bsTooltip("tc_in_2", "The \"run-in\" (or \"wash-in\") time constant is a measure of how long it takes for a treatment to ramp up to its full effect",
-                   placement = "right", trigger = "hover", options=list(container="body"))
+                   placement="right", trigger="hover", options=list(container="body"))
         ),
         conditionalPanel(
          condition = "input.n_treatments >= 3",
@@ -85,11 +85,11 @@ ui <- function(request) {
          numericInput("tc_in_3", "Run-in:", min=1, value=3),
          numericInput("tc_out_3", "Wash-out:", min=1, value=2),
          bsTooltip("effect_3", "The effect size is the asymptotic magnitude change from baseline that a person would experience in the long run, if they continued this treatment",
-                   placement = "right", trigger = "hover", options=list(container="body")),
+                   placement="right", trigger="hover", options=list(container="body")),
          bsTooltip("tc_out_3", "The \"wash-out\" (or \"carryover\") time constant is a measure of how long it takes for a treatment to stop working once it is discontinued",
-                   placement = "right", trigger = "hover", options=list(container="body")),
+                   placement="right", trigger="hover", options=list(container="body")),
          bsTooltip("tc_in_3", "The \"run-in\" (or \"wash-in\") time constant is a measure of how long it takes for a treatment to ramp up to its full effect",
-                   placement = "right", trigger = "hover", options=list(container="body"))
+                   placement="right", trigger="hover", options=list(container="body"))
         ),
         conditionalPanel(
          condition = "input.n_treatments >= 4",
@@ -99,11 +99,11 @@ ui <- function(request) {
          numericInput("tc_in_4", "Run-in:", min=1, value=3),
          numericInput("tc_out_4", "Wash-out:", min=1, value=2),
          bsTooltip("effect_4", "The effect size is the asymptotic magnitude change from baseline that a person would experience in the long run, if they continued this treatment",
-                   placement = "right", trigger = "hover", options=list(container="body")),
+                   placement="right", trigger="hover", options=list(container="body")),
          bsTooltip("tc_out_4", "The \"wash-out\" (or \"carryover\") time constant is a measure of how long it takes for a treatment to stop working once it is discontinued",
-                   placement = "right", trigger = "hover", options=list(container="body")),
+                   placement="right", trigger="hover", options=list(container="body")),
          bsTooltip("tc_in_4", "The \"run-in\" (or \"wash-in\") time constant is a measure of how long it takes for a treatment to ramp up to its full effect",
-                   placement = "right", trigger = "hover", options=list(container="body"))
+                   placement="right", trigger="hover", options=list(container="body"))
         ),
         conditionalPanel(
          condition = "input.n_treatments >= 5",
@@ -113,11 +113,11 @@ ui <- function(request) {
          numericInput("tc_in_5", "Run-in:", min=1, value=3),
          numericInput("tc_out_5", "Wash-out:", min=1, value=2),
          bsTooltip("effect_5", "The effect size is the asymptotic magnitude change from baseline that a person would experience in the long run, if they continued this treatment",
-                   placement = "right", trigger = "hover", options=list(container="body")),
+                   placement="right", trigger="hover", options=list(container="body")),
          bsTooltip("tc_out_5", "The \"wash-out\" (or \"carryover\") time constant is a measure of how long it takes for a treatment to stop working once it is discontinued",
-                   placement = "right", trigger = "hover", options=list(container="body")),
+                   placement="right", trigger="hover", options=list(container="body")),
          bsTooltip("tc_in_5", "The \"run-in\" (or \"wash-in\") time constant is a measure of how long it takes for a treatment to ramp up to its full effect",
-                   placement = "right", trigger = "hover", options=list(container="body"))
+                   placement="right", trigger="hover", options=list(container="body"))
         )
       ),
       column(4,
@@ -127,32 +127,41 @@ ui <- function(request) {
         numericInput("treatment_period", "Treatment period:", value=30),
         numericInput("sampling_timestep", "Samping timestep:", min=0.1, value=1, step=0.1),
         bsTooltip("treatment_schedule", "Ordering of treatment periods",
-                  placement = "right", trigger = "hover", options=list(container="body")),
+                  placement="right", trigger="hover", options=list(container="body")),
         bsTooltip("treatment_period", "Number of time intervals (e.g. days) for each treatment period",
-                  placement = "right", trigger = "hover", options=list(container="body")),
+                  placement="right", trigger="hover", options=list(container="body")),
         bsTooltip("sampling_timestep", "Time period between samples within a time interval",
-                  placement = "right", trigger = "hover", options=list(container="body")),
+                  placement="right", trigger="hover", options=list(container="body")),
         hr(),
         h3("Noise Parameters"),
         numericInput("sd_baseline", "S.D. Baseline drift", min=0, value=0.4, step=0.1),
         numericInput("sd_outcome", "S.D. Process noise", min=0, value=0.6, step=0.1),
         numericInput("sd_obs", "S.D. Observation noise", min=0, value=4, step = 0.1),
         bsTooltip("sd_baseline", "Baseline drift is a steady increase or decrease from baseline caused by long-term processes (e.g. long-term illness onset and recovery)",
-                  placement = "right", trigger = "hover", options=list(container="body")),
+                  placement="right", trigger="hover", options=list(container="body")),
         bsTooltip("sd_outcome", "Process noise consists of short-term fluctuations (e.g. changes in sleep and diet from day to day)",
-                  placement = "right", trigger = "hover", options=list(container="body")),
+                  placement="right", trigger="hover", options=list(container="body")),
         bsTooltip("sd_obs", "Observation noise is a function of the measurement instrument and not the underlying biological process (e.g. imprecision in a blood pressure cuff)",
-                  placement = "right", trigger = "hover", options=list(container="body"))
+                  placement="right", trigger="hover", options=list(container="body"))
       ),
       column(4,
         h3("Randomization"),
         numericInput("random_seed", "Random seed:", 1),
         actionButton("random_seed_generate", "Generate"),
+        bsTooltip("random_seed", "The random seed used to generate the simulation. The choice of random seed can be used to exactly reproduce a simulation.",
+                  placement="right", trigger="hover", options=list(container="body")),
+        bsTooltip("random_seed_generate", "Generate a random seed",
+                  placement="right", trigger="hover", options=list(container="body")),
         hr(),
-        actionButton("reset_button", "Reset inputs to default"),
-        br(),
-        br(),
-        bookmarkButton()
+        h3("Save data"),
+        bookmarkButton(id="bookmark_button", label="Bookmark link", title="Bookmark this application's state and get a URL for sharing"),
+        downloadButton("downloadData"),
+        bsTooltip("bookmark_button", "",
+                  placement="right", trigger="hover", options=list(container="body")),
+        bsTooltip("downloadData", "Download timeseries data as a CSV file",
+                  placement="right", trigger="hover", options=list(container="body")),
+        hr(),
+        actionButton("reset_button", "Reset inputs to default")
       )
     ),
     hr(),
@@ -349,6 +358,24 @@ server <- function(input, output, session) {
     
     updateNumericInput(session, "random_seed", value = 1)
   })
+  
+  ## Bookmark state
+  setBookmarkExclude("bookmark_button")
+  observeEvent(input$bookmark_button, {
+    session$doBookmark()
+  })
+  
+  ## Downloadable csv of dataset 
+  output$downloadData <- downloadHandler(
+    filename = function() {
+      paste0("n1sim-timeseries_random-seed-", input$random_seed, ".csv")
+    },
+    content = function(file) {
+      result = n1sim_result()
+      write.csv(result$timeseries, file)
+      #save(result, file="n1sim-result.RData")
+    }
+  )
   
 }
 
