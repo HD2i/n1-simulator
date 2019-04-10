@@ -27,3 +27,7 @@ install.packages('ggplot2')
 ## Usage
 
 See `examples/` in this repository.
+
+## Shiny web application
+
+To try out the simulator using a web user interface, visit http://n1sim.hd2i.org. See `shiny/` in this repository for the code.
