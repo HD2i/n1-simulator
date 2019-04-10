@@ -181,7 +181,7 @@ ui <- function(request) {
 # Define server logic
 server <- function(input, output, session) {
   ## Notification
-  notification_id <- NULL
+  notification_ids <- numeric()
   
   observe({
     input$n_treatments
@@ -207,13 +207,16 @@ server <- function(input, output, session) {
     input$sd_outcome
     input$sd_obs
     input$random_seed
-    notification_id <<- showNotification("Working...", duration = NULL, closeButton=FALSE, type="message")
+    
+    id <- showNotification("Working...", duration = NULL, closeButton=FALSE, type="message")
+    notification_ids <<- c(notification_ids, id)
   })
   
   observeEvent(n1sim_result(), {
-    if (!is.null(notification_id))
-      removeNotification(notification_id)
-    notification_id <<- NULL
+    while(length(notification_ids) > 0) {
+      removeNotification(notification_ids[length(notification_ids)])
+      notification_ids <<- head(notification_ids,-1)
+    }
   })
   
   ## Reactive elements
@@ -223,7 +226,12 @@ server <- function(input, output, session) {
     
     result <- vector()
     for(i in 1:isolate(input$n_treatments)) {
-      result <- c(result, eval(parse(text=paste0("input$effect_",i))))
+      effect_i = eval(parse(text=paste0("input$effect_",i)))
+      validate(
+        need(is.numeric(effect_i), 'Effect value must be numeric'),
+        errorClass="input-invalid"
+      )
+      result <- c(result, effect_i)
     }
     return(result)
   })
@@ -234,7 +242,12 @@ server <- function(input, output, session) {
     
     result <- vector()
     for(i in 1:isolate(input$n_treatments)) {
-      result <- c(result, eval(parse(text=paste0("input$tc_in_",i))))
+      tc_in_i = eval(parse(text=paste0("input$tc_in_",i)))
+      validate(
+        need(tc_in_i > 0, 'Run-in value must be greater than 0'),
+        errorClass="input-invalid"
+      )
+      result <- c(result, tc_in_i)
     }
     return(result)
   })
@@ -245,12 +258,26 @@ server <- function(input, output, session) {
     
     result <- vector()
     for(i in 1:isolate(input$n_treatments)) {
-      result <- c(result, eval(parse(text=paste0("input$tc_out_",i))))
+      tc_out_i = eval(parse(text=paste0("input$tc_out_",i)))
+      validate(
+        need(tc_out_i > 0, 'Wash-out value must be greater than 0'),
+        errorClass="input-invalid"
+      )
+      result <- c(result, tc_out_i)
     }
     return(result)
   })
   
   n1sim_result <- reactive({
+    validate(
+      need(input$sd_baseline >= 0, 'Baseline drift S.D. value must be greater than or equal to 0'),
+      need(input$sd_outcome >= 0, 'Process noise S.D. value must be greater than or equal to 0'),
+      need(input$sd_obs >= 0, 'Observation noise S.D. value must be greater than or equal to 0'),
+      need(input$treatment_period > 0, 'Treatment period value must be greater than 0'),
+      need(input$sampling_timestep > 0, 'Sampling timestep value must be greater than 0'),
+      errorClass="input-invalid"
+    )
+    
     n1_simulate(
       n_treatments = isolate(input$n_treatments), 
       n_blocks = isolate(input$n_blocks),
