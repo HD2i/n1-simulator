@@ -43,6 +43,16 @@ ui <- function(request) {
             hr(),
             h4("Model Fit 4: Treatment + Block Mixed Effect"),
             verbatimTextOutput("model4fit")
+          ),
+          tabPanel("About",
+            h5("Cite this ", a(href="https://www.jmir.org/2019/4/e12641/","resource"), " as:"),
+            p("Percha, B., Baskerville, E. B., Johnson, M., Dudley, J. T., & Zimmerman, N. (2019). Designing Robust N-of-1 Studies for Precision Medicine: Simulation Study and Design Recommendations. Journal of Medical Internet Research, 21(4), e12641."),
+            br(),
+            h4("ABSTRACT"),
+            p(strong("Background:"), "Recent advances in molecular biology, sensors, and digital medicine have led to an explosion of products and services for high-resolution monitoring of individual health. The N-of-1 study has emerged as an important methodological tool for harnessing these new data sources, enabling researchers to compare the effectiveness of health interventions at the level of a single individual."),
+            p(strong("Objective:"), "N-of-1 studies are susceptible to several design flaws. We developed a model that generates realistic data for N-of-1 studies to enable researchers to optimize study designs in advance."),
+            p(strong("Results:"), "Using simulation, we demonstrate how the number of treatment blocks, ordering of treatments within blocks, duration of each treatment, and sampling frequency affect our ability to detect true differences in treatment efficacy. We provide a set of recommendations for study designs on the basis of treatment, outcomes, and instrument parameters, and make our simulation software publicly available for use by the precision medicine community."),
+            p(strong("Conclusions:"), "Simulation can facilitate rapid optimization of N-of-1 study designs and increase the likelihood of study success while minimizing participant burden.")
           )
         )
       )
