@@ -237,4 +237,12 @@ baseline_initial  = 0.25
 | ------------- |:-------------:| ----:|----:
 | Accuracy | percent | ? | ? | positive |
 
+## R Model results
+```{r}
+# Model 2 from the paper
+m = lm(outcome_obs ~ factor(treatment) + factor(block), data = trailmaking.a)
+confint(m, level = 0.6)
+```
+
+
 
