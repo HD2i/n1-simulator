@@ -28,11 +28,12 @@ Study participants are randomized into 3 study lengths: 5, 15, or 27 days.
 ## Outline
 In each section, we generate sample data specific to the assessment using the N-of-1 study simulator described in [Designing Robust N-of-1 Studies for Precision Medicine: Simulation Study and Design Recommendations](https://www.jmir.org/2019/4/e12641/). The parameters underlying data generation relate to study design parameters, treatment-related parameters, measurement parameters and outcome-related parameters. For a complete description, see [Percha, et al](https://www.jmir.org/2019/4/e12641/). 
 
-For each of the 3 possible study lengths, we generate 3 datasets:
+For each of the 3 possible study lengths, we generate 4 datasets:
 
 1. *A > B* : the effect of treatment A improves performance relative to treatment B by a modest amount
 2. *B >> A* : the effect of treatment B improves performance relative to treatment A by a large amount
-3. *B == A* : there is no difference between the two treatment effects
+3. *(A == B) && (A,B > Baseline)* : there is no difference between the two treatment effects, both are better than baseline
+4. *A == B == Baseline*: Neither treatment had an effect
 
 The result is 9 simulated datasets per assessments, totalling 27 datasets.
 
@@ -71,7 +72,7 @@ convert_treatment1_to_baseline <- function( n1_simulate_result ){
 ```
 
 ### Post-processing
-Here are the parameter settings used to simulate data for the medium length (15 day) study. Note that `treatment_period=6` and `n_treatments=3`. Both of these settings will get modified in post-processing. 
+Here are the parameter settings used to simulate data for the long length  study. Note that `treatment_period=6` and `n_treatments=3`. Both of these settings will get modified in post-processing. 
 ```{r}
 n_blocks = 2
 n_treatments = 3
@@ -171,6 +172,7 @@ baseline_initial  = 15
 ```
 
 ### Long study
+ALERT: Look into why all of the final data points in each of these plots goes down. Have I screwed something up in post-processing?
 ```{r, echo = FALSE}
 # A > B
 trailmaking.a = generator(treatment_period = long_study_treatment_period + 1, 
