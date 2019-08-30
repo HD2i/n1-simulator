@@ -1,0 +1,65 @@
+@import url("https://fonts.googleapis.com/css?family=Lato:400,500,700");
+
+body {
+    background-color: #fff;
+    font-family: 'Lato', sans-serif;
+}
+
+label {
+    font-weight: 500
+}
+
+img {
+    margin-top: 10px;
+}
+
+#datavisRow {
+    height: 460px;
+    max-height: 460px;
+    overflow-y: auto;
+}
+
+#orgRow {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.irs-bar {
+    border-top: 1px solid #56b4e9;
+    border-bottom: 1px solid #56b4e9;
+    background: #56b4e9;
+}
+
+.irs-bar-edge {
+    border: 1px solid #56b4e9;
+    background: #56b4e9;
+}
+
+.irs-single {
+    background: #56b4e9;
+}
+
+.btn-default {
+    color: #56b4e9;
+    border-color: #56b4e9;
+}
+
+.btn-default:hover {
+    color: #56b4e9;
+    border-color: #56b4e9;
+}
+
+.tooltip-inner {
+  text-align: left;
+}
+
+span {
+  color: #777777;
+}
+
+.shiny-output-error-input-invalid {
+  color: red;
+  font-size: 1.5em;
+  padding-top: 20px;
+}

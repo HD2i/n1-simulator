@@ -20,6 +20,10 @@ n1_simulate <- function(
   
   return_data_frame = TRUE
 ) {
+  stopifnot(length(effect_size) == n_treatments)
+  stopifnot(length(tc_in) == n_treatments)
+  stopifnot(length(tc_out) == n_treatments)
+  
   if(is.na(random_seed)) {
     random_seed <- sample(2^31 - 1, 1)
   }
@@ -321,11 +325,10 @@ treatment_order_mat_to_str <- function(treatment_order_mat) {
 }
 
 treatment_order_str_to_mat <- function(n_blocks, treatment_order_str) {
-  print(treatment_order_str)
   if(is.character(treatment_order_str)) {
     treatment_order_vec_to_mat(
       n_blocks,
-      treatment_order_str_to_vec(treatment_order)
+      treatment_order_str_to_vec(treatment_order_str)
     )
   }
   else {
@@ -343,7 +346,7 @@ treatment_order_str_to_vec <- function(treatment_order_str) {
 }
 
 treatment_order_vec_to_mat <- function(n_blocks, treatment_order) {
-  as.matrix(treatment_order, nrow=n_blocks, byrow=TRUE)
+  matrix(treatment_order, nrow=n_blocks, byrow=TRUE)
 }
 
 matrix_to_column_list <- function(mat, prefix) {
