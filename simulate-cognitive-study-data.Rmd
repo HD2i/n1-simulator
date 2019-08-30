@@ -1,0 +1,238 @@
+---
+title: "Simulate Cognition Study Data"
+author: "Noah Zimmerman"
+date: "8/12/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(scales)
+library(dplyr)
+library(readr)
+library(gridExtra)
+source('n1-simulator.R')
+```
+
+# Introduction
+Here we generate a set of simulated datasets with realistic values for the [cognition study](https://www.n1app.org/cognitivestudy) on the [N1 App](https://www.n1app.org). The goal of the cognition study is to see how caffeine and caffeine + l-theanine affect creative thinking, processing speed, and visual attention, as measured by the following short cognitive exercises:
+
+* Stroop Test
+* Trailmaking Test
+* Remote Associates Test
+
+Study participants are randomized into 3 study lengths: 5, 15, or 27 days.
+
+## Outline
+In each section, we generate sample data specific to the assessment using the N-of-1 study simulator described in [Designing Robust N-of-1 Studies for Precision Medicine: Simulation Study and Design Recommendations](https://www.jmir.org/2019/4/e12641/). The parameters underlying data generation relate to study design parameters, treatment-related parameters, measurement parameters and outcome-related parameters. For a complete description, see [Percha, et al](https://www.jmir.org/2019/4/e12641/). 
+
+For each of the 3 possible study lengths, we generate 3 datasets:
+
+1. *A > B* : the effect of treatment A improves performance relative to treatment B by a modest amount
+2. *B >> A* : the effect of treatment B improves performance relative to treatment A by a large amount
+3. *B == A* : there is no difference between the two treatment effects
+
+The result is 9 simulated datasets per assessments, totalling 27 datasets.
+
+## Simulator post-processing
+The data generatd by `n1-simulator` requires 2 modifications to simulate data from the cognition study design: addition of a baseline period at the start of the study, and removing the run-in/wash-out period. Ultimately these modifications should be rolled into the simulator code (see [issue #3](https://github.com/HD2i/n1-simulator/issues/3) and [issue #4](https://github.com/HD2i/n1-simulator/issues/4)), but for now we do it in post-processing. 
+
+### Remove wash-out periods
+The simulator operates at the day timescale, and the run-in (`tc_in`) and wash-out (`tc_out`) parameters must be > 0. As a result, there is always an additional day at the end of a treatment period where we still see the effect from the previous treatment period. Since the cognition study has fast acting treatment (caffeine and l-theanine show effects on the order of hours, not days), we want to exclude these run-in/wash-out days. 
+
+We will accomplish this in the context of the current simulator by adding a day to the actual `treatment_period` variable, and then censoring that day from resulting simulated data frame, thereby removing the "wash-out" day. 
+```{r}
+censor_treatment_period <- function(n1_simulate_result, treatment_period ){
+  rows.to.censor = seq( from = 1, to = nrow(n1_simulate_result), 
+                        by = treatment_period )
+  slice(n1_simulate_result, -rows.to.censor)
+}
+```
+
+### Baseline addition
+The simulator does not include a notion of a baseline, which we consider as a period at the start of a study without treatment. In order to achieve this, we:
+
+1) Create an experiment with 3 treatments
+2) Set the effect size of treatment 1 to 0
+3) Recode treatment 1 as baseline in the first block
+4) Remove treatment 1 from the remaining blocks (leaving 2 treatments)
+```{r}
+convert_treatment1_to_baseline <- function( n1_simulate_result ){
+  block1 = filter(n1_simulate_result, block == 1)
+  rest   = filter(n1_simulate_result, block != 1) %>%
+    filter( treatment != 1)
+  
+  rbind(block1, rest) %>%
+    mutate(time = row_number()) %>%
+    select(time, block, treatment, outcome_obs, outcome)
+}
+```
+
+### Post-processing
+Here are the parameter settings used to simulate data for the medium length (15 day) study. Note that `treatment_period=6` and `n_treatments=3`. Both of these settings will get modified in post-processing. 
+```{r}
+n_blocks = 2
+n_treatments = 3
+treatment_period = 6
+baseline_initial = 15
+effect_size = c(0,3,6)
+tc_in = c(0.1, 0.1, 0.1)
+tc_out = c(0.1, 0.1, 0.1)
+tc_outcome = 0.1
+sd_baseline = 0.4
+sd_outcome = 0.2 # was 1 
+sd_obs = 0.4
+sampling_timestep = 1
+noise_timestep = 0.1
+treatment_order = c(1,2,3)
+random_seed = 5
+return_data_frame = TRUE
+```
+
+```{r, echo = FALSE}
+simulated.data <- n1_simulate(
+  n_treatments = n_treatments, n_blocks = n_blocks,
+  baseline_initial = baseline_initial, effect_size = effect_size, 
+  tc_in = tc_in, tc_out = tc_out, tc_outcome = tc_outcome,
+  sd_baseline = sd_baseline, sd_outcome = sd_outcome, sd_obs = sd_obs,
+  treatment_period = treatment_period, 
+  sampling_timestep = sampling_timestep, noise_timestep = noise_timestep,
+  treatment_order = treatment_order, random_seed = random_seed, 
+  return_data_frame = return_data_frame
+)
+```
+
+Use the two functions we defined earlier to censor the wash-out day and convert treatment 1 to baseline
+```{r, fig.align='center', fig.width = 9, warning=FALSE, message=FALSE}
+processed.data = censor_treatment_period(simulated.data$timeseries, 
+                                         treatment_period)
+processed.data = convert_treatment1_to_baseline(processed.data)
+```
+
+### Results
+```{r fig.align='center', fig.width = 9, echo = FALSE}
+before.plot = ggplot(data = simulated.data$timeseries, aes(x = t)) + 
+  geom_line(aes(y = outcome)) + 
+  geom_point(aes(y = outcome_obs, col = factor(treatment))) + 
+  ggtitle("Simulator output") + 
+  theme_bw() + theme(legend.position = "none")
+
+after.plot = ggplot(data = processed.data, aes(x = time)) + 
+  geom_line(aes(y = outcome)) + 
+  geom_point(aes(y = outcome_obs, col = factor(treatment))) +
+  ggtitle("After processing") + 
+  theme_bw() + theme(legend.position = "none")
+
+grid.arrange(before.plot, after.plot, ncol=2)
+```
+
+# Sample Data Generation
+In the following sections we generate sample data for each of the 3 cognitive assessments included in the cognition study. 
+
+Set up parameters for each of the 3 studies:
+```{r}
+short_study_treatment_period    = 1
+medium_study_treatment_period   = 3
+long_study_treatment_period     = 5
+```
+
+```{r, echo=FALSE}
+generator <- function( treatment_period, effect_size ){
+  
+  simulated.data <- n1_simulate(
+    n_treatments = n_treatments, n_blocks = n_blocks,
+    baseline_initial = baseline_initial, effect_size = effect_size, 
+    tc_in = tc_in, tc_out = tc_out, tc_outcome = tc_outcome,
+    sd_baseline = sd_baseline, sd_outcome = sd_outcome, sd_obs = sd_obs,
+    treatment_period = treatment_period, 
+    sampling_timestep = sampling_timestep, noise_timestep = noise_timestep,
+    treatment_order = treatment_order, random_seed = random_seed, 
+    return_data_frame = return_data_frame
+  )
+  
+  processed.data = censor_treatment_period(simulated.data$timeseries, 
+                          treatment_period)
+  processed.data = convert_treatment1_to_baseline(processed.data)
+  
+  processed.data
+}
+```
+
+## Trailmaking Test
+| Metric        | Unit          | Min  | Max | Effect improvement sign |
+| ------------- |:-------------:| ----:|----:
+| time | second | ? | ? | negative |
+
+Trailmaking specific parameter overrides
+```{r}
+baseline_initial  = 15
+```
+
+### Long study
+```{r, echo = FALSE}
+# A > B
+trailmaking.a = generator(treatment_period = long_study_treatment_period + 1, 
+                          effect_size = c(0,-2,-0.5) )
+
+# B >> A
+trailmaking.b = generator(treatment_period = long_study_treatment_period + 1, 
+                          effect_size = c(0,0.5,-3) )
+
+# (A == B) && (A,B > Baseline)
+trailmaking.c = generator(treatment_period = long_study_treatment_period + 1, 
+                          effect_size = c(0,-1.5,-1.3) )
+
+# A == B == Baseline
+trailmaking.d = generator(treatment_period = long_study_treatment_period + 1, 
+                          effect_size = c(0,0.1,-0.1) )
+
+plot.a = ggplot(data = trailmaking.a, aes(x = time)) + 
+  geom_line(aes(y = outcome)) + 
+  geom_point(aes(y = outcome_obs, col = factor(treatment))) +
+  ggtitle("Trailmaking A > B") + 
+  theme_bw() + theme(legend.position = "none")
+
+plot.b = ggplot(data = trailmaking.b, aes(x = time)) + 
+  geom_line(aes(y = outcome)) + 
+  geom_point(aes(y = outcome_obs, col = factor(treatment))) +
+  ggtitle("Trailmaking B >> A") + 
+  theme_bw() + theme(legend.position = "none")
+
+plot.c = ggplot(data = trailmaking.c, aes(x = time)) + 
+  geom_line(aes(y = outcome)) + 
+  geom_point(aes(y = outcome_obs, col = factor(treatment))) +
+  ggtitle("Trailmaking (A == B) && (A,B > Baseline)") + 
+  theme_bw() + theme(legend.position = "none")
+
+plot.d = ggplot(data = trailmaking.d, aes(x = time)) + 
+  geom_line(aes(y = outcome)) + 
+  geom_point(aes(y = outcome_obs, col = factor(treatment))) +
+  ggtitle("Trailmaking A == B == Baseline") + 
+  theme_bw() + theme(legend.position = "none")
+```
+
+```{r fig.align='center', fig.width = 9, echo = FALSE}
+grid.arrange(plot.a, plot.b, plot.c, plot.d, ncol=2)
+```
+
+
+## Stroop Test
+| Metric        | Unit          | Min  | Max | Effect improvement sign |
+| ------------- |:-------------:| ----:|----:
+| rate correct score | correct/second | ? | ? | positive |
+
+@TODO - what is a reasonable range of values for `rate correct score`
+
+Stroop specific parameter overrides
+```{r}
+baseline_initial  = 0.25
+```
+
+## Remote Associate Test
+| Metric        | Unit          | Min  | Max | Effect improvement sign |
+| ------------- |:-------------:| ----:|----:
+| Accuracy | percent | ? | ? | positive |
+
+
